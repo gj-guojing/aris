@@ -478,7 +478,205 @@ namespace aris::dynamic{
 		updateInertiaParam(x.data());
 		return 0;
 	}
+
+	struct CalibInequalityRawParam
+	{
+		double m{};
+		double cx{};
+		double cy{};
+		double cz{};
+		double Ixx{};
+		double Iyy{};
+		double Izz{};
+		double Ixy{};
+		double Ixz{};
+		double Iyz{};
+		double ki{};
+	};
 	
+	auto Calibrator::clbFilesUsingQP(const std::vector<std::string>& file_paths)->int {
+		// init some values //
+		if (imp_->torque_constant_.empty())imp_->torque_constant_.resize(model()->motionPool().size(), 1.0);
+		if (imp_->velocity_ratio_.empty()) imp_->velocity_ratio_.resize(model()->motionPool().size(), 1.0);
+		if (imp_->torque_weight_.empty())  imp_->torque_weight_.resize(model()->motionPool().size(), 1.0);
+		if (imp_->velocity_dead_zone_.empty())imp_->velocity_dead_zone_.resize(model()->motionPool().size(), 0.1);
+
+		// make datasets //
+		//std::cout << "making datasets" << std::endl;
+		std::vector<std::vector<double> > pos(model()->motionPool().size());
+		std::vector<std::vector<double> > vel(model()->motionPool().size());
+		std::vector<std::vector<double> > acc(model()->motionPool().size());
+		std::vector<std::vector<double> > fce(model()->motionPool().size());
+
+		for (auto& file : file_paths) {
+			std::cout << "clb----loading file:" << file << std::endl;
+			auto mtx = aris::dynamic::dlmread(file.c_str());
+			std::vector<std::vector<std::vector<double> >*> dataset{ &pos, &vel, &acc, &fce };
+			makeDataset(this, mtx, dataset);
+		}
+
+		// make calibration matrix //
+		std::cout << "clb----computing data" << std::endl;
+		this->allocateMemory();
+
+		auto num = pos[0].size();
+		std::vector<double> A(num * m() * n()), b(num * m(), 0.0), tau(num * m(), 0.0), x(num * m(), 0.0);
+		std::vector<aris::Size> p(num * m());
+
+		Size rows{ 0 }, cols{ n() };
+		for (int i = 0; i < num; ++i) {
+			for (int j = 0; j < model()->motionPool().size(); ++j) {
+				this->model()->motionPool()[j].setP(&pos[j][i]);
+				this->model()->motionPool()[j].setV(&vel[j][i]);
+				this->model()->motionPool()[j].setA(&acc[j][i]);
+			}
+
+			this->model()->solverPool().at(1).kinPos();
+			this->model()->solverPool().at(1).kinVel();
+			this->model()->solverPool().at(2).dynAccAndFce();
+
+			for (int j = 0; j < model()->motionPool().size(); ++j) {
+				this->model()->motionPool()[j].setF(&fce[j][i]);
+			}
+			this->clb();
+
+			for (int j = 0; j < model()->motionPool().size(); ++j) {
+				// 考虑速度死区 //
+				if (std::abs(this->model()->motionPool()[j].mv()) < velocityDeadZone()[j])continue;
+
+				// 考虑电机扭矩权重 //
+				s_vc(n(), 1.0 / torqueWeight()[j], this->A() + j * n(), A.data() + rows * n());
+				b[rows] = this->b()[j] * 1.0 / torqueWeight()[j];
+				rows++;
+			}
+		}
+		auto max_value = *std::max_element(A.begin(), A.begin() + rows * n());
+		auto min_value = *std::min_element(A.begin(), A.begin() + rows * n());
+		auto real_max = std::max(std::abs(max_value), std::abs(min_value));
+		std::cout << "clb----A size:" << rows << "x" << cols << std::endl;
+		std::cout << "clb----max value of A:" << real_max << std::endl;
+
+		// solve calibration matrix //
+		std::vector<double> U(rows * n());
+
+		//std::cout << "solve calibration matrix" << std::endl;
+		aris::Size rank;
+		double zero_check = 1e-6;
+
+		s_nv(rows * n(), 1.0 / real_max, A.data());
+		s_nv(rows, 1.0 / real_max, b.data());
+
+		// solve G, g
+		const aris::Size nG = n();
+		std::vector<double> G(nG * nG), g(nG);
+		s_mm(n(), n(), rows, A.data(), T(n()), A.data(), n(), G.data(), n());
+		s_mm(1, n(), rows, b.data(), T(1), A.data(), n(), g.data(), 1);
+
+		///////////////////////////////////////////// make x ///////////////////////////////////////
+		//Size xi = 0;
+		//for (auto& prt : model()->partPool()) {
+		//	if (prt.active() && &prt != &model()->ground()) {
+		//		s_vc(10, prt.prtIv(), x + xi);
+		//		xi += 10;
+		//	}
+		//}
+		//// make x from frictions //
+		//bi = 0;
+		//for (auto& blk : imp_->cst_blk_vec_) {
+		//	if (dynamic_cast<Motion*>(blk.c)) {
+		//		s_vc(3, dynamic_cast<Motion*>(blk.c)->frcCoe(), x + g() + bi * 3);
+		//		bi++;
+		//	}
+		//}
+
+
+		// construct inequality constraints
+		// make CI
+		const aris::Size param_num_per_link = 11;
+		const aris::Size calibpar_num_per_link = 13;
+		const aris::Size make_step = param_num_per_link * n();
+		const aris::Size nCI = param_num_per_link * 4;
+		std::vector<double> CI(nCI * n(), 0.0);
+		for (size_t i = 0; i < param_num_per_link - 1; i++){
+			CI[at(i, i, n())] = -1;
+			CI[at(i + param_num_per_link, i, n())] = 1;
+			CI[at(i + param_num_per_link * 2, i + calibpar_num_per_link, n())] = -1;
+			CI[at(i + param_num_per_link * 3, i + calibpar_num_per_link, n())] = 1;
+		}
+		
+		CI[at(param_num_per_link - 1, calibpar_num_per_link - 1, n())] = -1;
+		CI[at(2 * param_num_per_link - 1, calibpar_num_per_link - 1, n())] = 1;
+		CI[at(3 * param_num_per_link - 1, n() - 1, n())] = -1;
+		CI[at(4 * param_num_per_link - 1, n() - 1, n())] = 1;
+		
+		// make ci
+		const aris::Size m_size = model()->motionPool().size();
+		std::vector<double> ci(nCI, 0.0), ci_base(param_num_per_link * 2, 0.0);
+		CalibInequalityRawParam l1{}, l2{};
+		l1.m = 1.469;
+		l1.cx = 0.009 * 10E-3;
+		l1.cy = 1.239 * 10E-3;
+		l1.cz = 165.468 * 10E-3;
+		l1.Ixx = 6995.572 * 10E-6;
+		l1.Iyy = 7667.511 * 10E-6;
+		l1.Izz = 1357.599 * 10E-6;
+		l1.Ixy = 0.332 * 10E-6;
+		l1.Ixz = 0.387 * 10E-6;
+		l1.Iyz = -467.024 * 10E-6;
+		l1.ki = 1002 * 10E-3 * 10E-4;
+
+		l2.m = 2.285;
+		l2.cx = 0.001 * 10E-3;
+		l2.cy = -10.131 * 10E-3;
+		l2.cz = 166.209 * 10E-3;
+		l2.Ixx = 9145.552 * 10E-6;
+		l2.Iyy = 9103.438 * 10E-6;
+		l2.Izz = 1637.069 * 10E-6;
+		l2.Ixy = -0.042 * 10E-6;
+		l2.Ixz = -0.316 * 10E-6;
+		l2.Iyz = 534.887 * 10E-6;
+		l2.ki = 1002 * 10E-3 * 10E-4;
+
+		ci_base = { l1.m, l1.m * l1.cx, l1.m * l1.cy, l1.m * l1.cz, l1.Ixx, l1.Iyy, l1.Izz, l1.Ixy, l1.Ixz, l1.Iyz, l1.ki ,
+					l2.m, l2.m * l2.cx, l2.m * l2.cy, l2.m * l2.cz, l2.Ixx, l2.Iyy, l2.Izz, l2.Ixy, l2.Ixz, l2.Iyz, l2.ki };
+
+		const double percent = 0.5;
+		for (size_t i = 0; i < param_num_per_link; i++) {
+			ci[i]                          = -ci_base[i] * (1 - percent);
+			ci[i + param_num_per_link]     =  ci_base[i] * (1 + percent);
+			ci[i + param_num_per_link * 2] = -ci_base[i + param_num_per_link] * (1 - percent);
+			ci[i + param_num_per_link * 3] =  ci_base[i + param_num_per_link] * (1 + percent);
+		}
+
+		const aris::Size nCE = 0;
+		std::vector<double> CE(nCE * n()), ce(nCE);
+		std::vector<double> mem(2 * nG * nG + 3 * nG + 8 * (nCE + nCI));
+
+		// solve QP
+		s_quadprog(nG, nCE, nCI, G.data(), g.data(), CE.data(), ce.data(), CI.data(), ci.data(), x.data(), mem.data());
+
+		//s_householder_utp(rows, n(), A.data(), U.data(), tau.data(), p.data(), rank, zero_check);
+		//s_householder_utp_sov(rows, n(), 1, rank, U.data(), tau.data(), p.data(), b.data(), x.data(), zero_check);
+		//std::cout << "clb----rank:" << rank << std::endl;
+
+		std::cout << "clb----inertia result:" << std::endl;
+		dsp(model()->partPool().size() - 1, 10, x.data());
+		std::cout << "clb----friction result:" << std::endl;
+		dsp(model()->motionPool().size(), 3, x.data() + (model()->partPool().size() - 1) * 10);
+
+
+		// check variance //
+		s_mms(rows, 1, n(), A.data(), x.data(), b.data());
+		auto variance = std::sqrt(s_vv(n(), b.data(), b.data()) / n());
+		std::cout << "clb----variance:" << variance << std::endl;
+
+		if (variance > imp_->tolerable_variance_) return -1;
+
+		// update inertias //
+		updateInertiaParam(x.data());
+		return 0;
+	}
+
 	auto Calibrator::setVerifyOutputFileDir(std::string file_path)->void {
 		imp_->verify_result_path = file_path;
 	}
