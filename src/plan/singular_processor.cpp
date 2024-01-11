@@ -409,6 +409,77 @@ namespace aris::plan {
 					return ret;
 			}
 
+			///////////////////////////// PART 1 计算 d3s 的可选范围 ///////////////////////////////// 
+			// 
+			// 应有以下等式：
+			// dp_min  < dp  < dp_max
+			// d2p_min < d2p < d2p_max
+ 			// d3p_min < d3p < d3p_max
+			//
+			// dp  = dp_ds * ds
+			// d2p = d2p_ds2 * ds^2 + dp_ds * d2s
+			// d3p = d3p_ds2 * ds^3 + 2 * d2p_ds * ds * d2s + d2p_ds * ds * d2s + dp_ds * d3s
+			//     = d3p_ds2 * ds^3 + 3 * d2p_ds * ds * d2s + dp_ds * d3s
+			//
+			// 带入上述不等式，应有：
+			//                                     dp_min/dp_ds < ds  < dp_max/dp_ds
+			//                   (d2p_max-d2p_ds2 * ds^2)/dp_ds < d2s < (d2p_max-d2p_ds2 * ds^2)/dp_ds
+			//  (d3p_min-d3p_ds2 * ds^3 - 3 * d2p_ds * ds * d2s)< d3s < (d3p_max-d3p_ds2 * ds^3 - 3 * d2p_ds * ds * d2s)/dp_ds
+			//
+			// 若 dp_ds < 0，则上式左右相反。
+			//
+			// 上式仅考虑了电机端的输入，没有考虑加速度将为 0 也需要时间。此时：
+			//
+			//       dp_min  <  dp + d2p * T + 0.5 * d3p * T^2  <  dp_max
+			//                                  
+			// 中间式子在 T = -d2p/d3p 时取到极值，大小为：
+			//    
+			//       dp - 0.5*d2p*d2p/d3p
+			//
+			// 若 d2p < 0，则应有 d3p > 0：
+			//       dp_min < dp - 0.5*d2p*d2p/d3p
+			// =>    d2p*d2p/d3p < 2*(dp-dp_min)
+			// =>    d3p > d2p*d2p/(2(dp-dp_min))
+			// 		
+			// 否则应有 d3p < 0：
+			//
+			//       d3p < d2p*d2p/(2(dp_max-dp))
+			//
+			// 考虑加速度不超限，应有：
+			// 
+			//                    d2p_min < d2p + d3p*dt < d2p_max
+			// =>     (d2p_min - d2p)/dt  <      d3p     <  (d2p_max - d2p)/dt
+			//  
+			///////////////////////////// PART 2 计算其中的数据 ///////////////////////////////// 
+			// t0        t1         t2         t3
+			//
+			// p0        p1         p2         p3
+			//     dp1        dp2        dp3
+			//          d2p2       d2p3
+			//               d3p3
+			//  
+			// s0        s1         s2         s3
+			//     ds1        ds2        ds3
+			//          d2s2       d2s3
+			//               d3s3
+			//
+			//         ds(t1)    ds(t2)
+			//        d2s(t1)    d2s(t2)
+			//
+			//
+			//at point t1.5:
+			//
+			//dp(t1.5)  = dp_ds(t1) * ds(t1)
+			//d2p(t1.5) = d2p_ds2(t1) * ds(t1)^2 + dp_ds(t1) * d2s(t1)
+			//          = d2p_ds2(t1) * ds(t1)^2 + (dp1+dp2)/2 / ((ds1+ds2)/2)
+			//
+			// 令 f(t) = d3p_ds2 * ds^3 + 3 * d2p_ds * ds * d2s，则：
+			// 
+			// d3p(t1.5) = f(t1.5) + dp_ds(t1.5) * d3s(t1.5)
+			//           = f(t1.5) + dp(t1.5) / ds(t1) * d2s(t1.5)
+			//
+			// 
+
 			auto last_ds = imp_->current_ds_;
 
 			// 取出位置
@@ -507,11 +578,11 @@ namespace aris::plan {
 			target_ds = std::max(0.01, target_ds);
 			target_ds = std::min(1.0, target_ds);
 			if (target_ds - last_ds > dt * max_dds) {
-				imp_->current_ds_ = last_ds + dt * max_dds;
-			}
+					imp_->current_ds_ = last_ds + dt * max_dds;
+				}
 			else if (target_ds - last_ds < dt * min_dds) {
-				imp_->current_ds_ = last_ds + dt * min_dds;
-			}
+					imp_->current_ds_ = last_ds + dt * min_dds;
+				}
 			else {
 				imp_->current_ds_ = target_ds;
 			}
@@ -523,7 +594,7 @@ namespace aris::plan {
 
 			imp_->current_ds_ = std::max(0.01, imp_->current_ds_);
 			imp_->current_ds_ = std::min(1.0, imp_->current_ds_);
-
+			
 			imp_->tg_->setCurrentDs(imp_->current_ds_);
 			imp_->tg_->setCurrentDds(0.0);
 			imp_->tg_->setTargetDs(imp_->current_ds_);
