@@ -402,7 +402,7 @@ namespace aris::plan {
 		double zero_check = 1e-10;
 		
 		const double MAX_DS = 1.0;
-		const double MIN_DS = 0.005;
+		const double MIN_DS = std::min(0.005, param.target_ds);
 		const double MAX_D2S = 10.0;
 		const double MIN_D2S = -10.0;
 		const double MAX_D3S = 10000.0;
@@ -460,10 +460,6 @@ namespace aris::plan {
 			auto d2p2 = (dp2 - dp1) / dt;
 			
 			auto d3p3 = (d2p3 - d2p2) / dt;
-
-			//dp3[i] = (p3[i] - p2[i]) / dt;
-			//d2p3[i] = (dp3 - dp2) / dt;
-			//d3p3[i] = (d2p3[i] - d2p2[i]) / dt;
 
 			auto dp_t15 = dp2;
 			auto d2p_t15 = (d2p2 + d2p3) / 2;
@@ -549,7 +545,7 @@ namespace aris::plan {
 		double next_ds, next_d2s, next_d3s{ 0.0 };
 
 		// 0. ds 过小、无法通过ds 判断出原始轨迹的曲率等
-		if (ds3 <= zero_check) {
+		if (ds3 <= zero_check || ds2 < zero_check || ds1 < zero_check) {
 			aris::Size total_count;
 			s_follow_x(ds3, d2s3, target_ds, MAX_D2S, MIN_D2S, MAX_D3S, MIN_D3S, dt, zero_check, next_ds, next_d2s, next_d3s, total_count);
 			goto next_step;
@@ -576,8 +572,8 @@ namespace aris::plan {
 					auto d3s_desired = ds3 < MAX_DS ? -d2s3 * d2s3 / ((MAX_DS - (ds3)) * 2.0) : 0.0;
 					is_avalable = d3s_desired > d3s_min;
 
-					auto d2s_desired = std::sqrt(std::max(-d3s_min * (MAX_DS - (ds3 + d2s3 * dt + 0.5 * d3s_max * dt*dt))*2.0, 0.0));
-					d3s_max = std::min(d3s_max, (d2s_desired - d2s3) / dt);
+					//auto d2s_desired = std::sqrt(std::max(-d3s_min * (MAX_DS - (ds3 + d2s3 * dt + 0.5 * d3s_max * dt*dt))*2.0, 0.0));
+					//d3s_max = std::min(d3s_max, (d2s_desired - d2s3) / dt);
 				}
 				else {
 					is_avalable = true;
@@ -591,8 +587,8 @@ namespace aris::plan {
 					auto d3s_desired = ds3 > MIN_DS ? -d2s3 * d2s3 / ((MIN_DS - ds3) * 2.0) : 0.0;
 					is_avalable = d3s_desired < d3s_max;
 
-					auto d2s_desired = -std::sqrt(std::max(d3s_max * (MIN_DS - (ds3 + d2s3 * dt + 0.5 * d3s_min * dt * dt)) * 2.0, 0.0));
-					d3s_min = std::max(d3s_min, (d2s_desired - d2s3) / dt);
+					//auto d2s_desired = -std::sqrt(std::max(-d3s_max * (MIN_DS - (ds3 + d2s3 * dt + 0.5 * d3s_min * dt * dt)) * 2.0, 0.0));
+					//d3s_min = std::max(d3s_min, (d2s_desired - d2s3) / dt);
 				}
 			}
 			if (is_avalable) {
@@ -705,8 +701,8 @@ namespace aris::plan {
 
 #endif // ARIS_DEBUG_SINGULAR_PROCESSOR
 
-		next_d2s = d2s3 + next_d3s * dt;
-		next_ds = ds3 + next_d2s * dt;
+		//next_d2s = d2s3 + next_d3s * dt;
+		//next_ds = ds3 + next_d2s * dt;
 
 		next_ds = std::min(next_ds, MAX_DS);
 		next_ds = std::max(next_ds, std::min(MIN_DS, target_ds));
@@ -730,13 +726,13 @@ namespace aris::plan {
 			* min_vels_,
 			* min_accs_,
 			* min_jerks_,
-			* input_pos_begin_,
+			* input_pos_begin_,// 奇异状态的起始值
 			* input_vel_begin_,
 			* input_acc_begin_,
-			* input_pos_end_,
+			* input_pos_end_,  // 奇异状态的终止值
 			* input_vel_end_,
 			* input_acc_end_,
-			* input_pos_last_,
+			* input_pos_last_, // 真实状态值
 			* input_vel_last_,
 			* input_pos_this_,
 			* input_vel_this_,
@@ -745,7 +741,7 @@ namespace aris::plan {
 			* input_acc_max_consider_ratio_,
 			* input_acc_min_consider_ratio_,
 			* output_pos_,
-			* p0_,
+			* p0_,             // 理想的位置值，仅仅在 move_in_tg 中改变
 			* p1_,
 			* p2_,
 			* p3_;
@@ -913,7 +909,7 @@ namespace aris::plan {
 
 		// move tg step //
 		// max_vel_ratio 和 max_acc_ratio 会触发正常降速
-		auto move_tg_step = [this, get_max_ratio]()->std::int64_t {
+		auto move_tg_step = [this]()->std::int64_t {
 			// 当前处于非奇异状态，正常求反解 //
 			auto ret = imp_->tg_->getEePosAndMoveDt(imp_->output_pos_);
 			if (imp_->inv_func_) {
@@ -952,21 +948,6 @@ namespace aris::plan {
 			imp_->tg_->setCurrentDds(0.0);
 			imp_->tg_->setTargetDs(smooth_ret.next_ds);
 
-			// 保存位置 //
-			std::swap(imp_->input_pos_this_, imp_->input_pos_last_);
-			aris::dynamic::s_vc(imp_->input_size_, imp_->p3_, imp_->input_pos_this_);
-
-			// 保存速度 //
-			std::swap(imp_->input_vel_this_, imp_->input_vel_last_);
-			aris::dynamic::s_vc(imp_->input_size_, imp_->input_pos_this_, imp_->input_vel_this_);
-			aris::dynamic::s_vs(imp_->input_size_, imp_->input_pos_last_, imp_->input_vel_this_);
-			aris::dynamic::s_nv(imp_->input_size_, 1.0 / imp_->tg_->dt(), imp_->input_vel_this_);
-
-			// 保存加速度 //
-			aris::dynamic::s_vc(imp_->input_size_, imp_->input_vel_this_, imp_->input_acc_this_);
-			aris::dynamic::s_vs(imp_->input_size_, imp_->input_vel_last_, imp_->input_acc_this_);
-			aris::dynamic::s_nv(imp_->input_size_, 1.0 / imp_->tg_->dt(), imp_->input_acc_this_);
-
 			return ret;
 		};
 
@@ -1003,11 +984,15 @@ namespace aris::plan {
 		};
 
 		// check if singular //
-		auto check_if_singular = [](aris::Size input_size, const double* max_vel, const double* max_acc, const double* vel, const double* acc)->int {
+		auto check_if_singular = [](aris::Size input_size, double dt, const double* max_vel, const double* max_acc, const double* p1, const double* p2, const double *p3)->int {
 			// here is condition //
 			int idx = 0;
 			for (idx = 0; idx < input_size; ++idx) {
-				if (vel[idx] > max_vel[idx] || vel[idx] < -max_vel[idx] || acc[idx] > max_acc[idx] || acc[idx] < -max_acc[idx]) {
+				double v2 = (p3[idx] - p2[idx]) / dt;
+				double v1 = (p2[idx] - p1[idx]) / dt;
+				double a = (v2 - v1) / dt;
+
+				if (v2 > max_vel[idx] || v2 < -max_vel[idx] || a > max_acc[idx] || a < -max_acc[idx]) {
 #ifdef ARIS_DEBUG_SINGULAR_PROCESSOR
 					std::cout << "singular idx" << idx << " vel:" << vel[idx] << "  max_vel:" << max_vel[idx] << "  acc:" << acc[idx] << "  max_acc:" << max_acc[idx] << std::endl;
 #endif
@@ -1023,8 +1008,13 @@ namespace aris::plan {
 #endif
 			imp_->state_ = Imp::SingularState::SINGULAR_PREPARE;
 
+			// 将当前值置为起始值
+			aris::dynamic::s_vc(imp_->input_size_, imp_->input_pos_this_, imp_->input_pos_begin_);
+			aris::dynamic::s_vc(imp_->input_size_, imp_->input_vel_this_, imp_->input_vel_begin_);
+
+
 			// 尝试迭代到下一个非奇异的时刻，最多迭代 10 次 //
-			const int MAX_ITER_COUNT = 12;
+			const int MAX_ITER_COUNT = 2;
 
 			int idx;
 			int while_count{ 0 };
@@ -1032,15 +1022,18 @@ namespace aris::plan {
 			do {
 				while_count++;
 				imp_->singular_ret_ = move_tg_step();
-				idx = check_if_singular(imp_->input_size_, imp_->max_vels_, imp_->max_accs_, imp_->input_vel_this_, imp_->input_acc_this_);
+				idx = check_if_singular(imp_->input_size_, dt, imp_->max_vels_, imp_->max_accs_, imp_->p1_, imp_->p2_, imp_->p3_);
 
 				// 尝试处理奇异情况 //
 				if (idx == imp_->input_size_ || while_count >= MAX_ITER_COUNT) {
-					// 获取终止时刻 //
-					aris::dynamic::s_vc(imp_->input_size_, imp_->input_pos_this_, imp_->input_pos_end_);
-					aris::dynamic::s_vc(imp_->input_size_, imp_->input_vel_this_, imp_->input_vel_end_);
+					// 保存终止时刻的位置与速度 //
+					aris::dynamic::s_vc(imp_->input_size_, imp_->p3_, imp_->input_pos_end_);
 
-					// 考虑结束条件可能是循环次数到了
+					aris::dynamic::s_vc(imp_->input_size_, imp_->p3_, imp_->input_vel_end_);
+					aris::dynamic::s_vs(imp_->input_size_, imp_->p2_, imp_->input_vel_end_);
+					aris::dynamic::s_nv(imp_->input_size_, 1.0 / imp_->tg_->dt(), imp_->input_vel_end_);
+
+					// 考虑结束条件可能是循环次数到了，因此将终止速度保护
 					for (int i = 0; i < imp_->input_size_; ++i) {
 						imp_->input_vel_end_[i] = std::max(-imp_->max_vels_[i], imp_->input_vel_end_[i]);
 						imp_->input_vel_end_[i] = std::min(imp_->max_vels_[i], imp_->input_vel_end_[i]);
@@ -1052,9 +1045,9 @@ namespace aris::plan {
 						auto& tcurve_param = imp_->curve_params_[i];
 
 						tcurve_param.pb = imp_->input_pos_begin_[i];
-						tcurve_param.pe = imp_->input_pos_this_[i];
+						tcurve_param.pe = imp_->input_pos_end_[i];
 						tcurve_param.vb = imp_->input_vel_begin_[i];
-						tcurve_param.ve = imp_->input_vel_this_[i];
+						tcurve_param.ve = imp_->input_vel_end_[i];
 						tcurve_param.vmax = imp_->max_vels_[i];
 						tcurve_param.amax = imp_->max_accs_[i];
 
@@ -1129,17 +1122,13 @@ namespace aris::plan {
 
 					// 判断是否满足完全修复条件
 					auto& singular_param = imp_->curve_params_[imp_->singular_idx];
-					if ((singular_param.vb * singular_param.ve < 0.0)
-						|| (singular_param.v * singular_param.vb >= 0))
+					if (idx == imp_->input_size_ && 
+						((singular_param.vb * singular_param.ve < 0.0) || (singular_param.v * singular_param.vb >= 0)))
 					{
 						imp_->state_ = Imp::SingularState::SINGULAR;
 					}
 				}
 			} while (imp_->state_ != Imp::SingularState::SINGULAR && while_count < MAX_ITER_COUNT);
-
-			// 复原上一时刻
-			aris::dynamic::s_vc(imp_->input_size_, imp_->input_pos_begin_, imp_->input_pos_this_);
-			aris::dynamic::s_vc(imp_->input_size_, imp_->input_vel_begin_, imp_->input_vel_this_);
 
 			// 移动一步
 			return move_in_singular();
@@ -1153,22 +1142,30 @@ namespace aris::plan {
 #ifdef ARIS_DEBUG_SINGULAR_PROCESSOR
 			std::cout << "singular prepare" << std::endl;
 #endif
-			// 这一次的开始是真正开始的值 //
-			aris::dynamic::s_vc(imp_->input_size_, imp_->input_pos_this_, imp_->input_pos_begin_);
-			aris::dynamic::s_vc(imp_->input_size_, imp_->input_vel_this_, imp_->input_vel_begin_);
-			aris::dynamic::s_vc(imp_->input_size_, imp_->input_pos_end_, imp_->input_pos_this_);
-			aris::dynamic::s_vc(imp_->input_size_, imp_->input_vel_end_, imp_->input_vel_this_);
 			return prepare_singular();
 		}
 		else {
 			imp_->singular_ret_ = move_tg_step();
-			if ((imp_->singular_idx = check_if_singular(imp_->input_size_, imp_->max_vels_, imp_->max_accs_, imp_->input_vel_this_, imp_->input_acc_this_)) == imp_->input_size_) {
+
+			if ((imp_->singular_idx = check_if_singular(imp_->input_size_, imp_->tg_->dt(), imp_->max_vels_, imp_->max_accs_, imp_->p1_, imp_->p2_, imp_->p3_)) == imp_->input_size_) {
+				// 正常保存位置 //
+				std::swap(imp_->input_pos_this_, imp_->input_pos_last_);
+				aris::dynamic::s_vc(imp_->input_size_, imp_->p3_, imp_->input_pos_this_);
+
+				// 保存速度 //
+				std::swap(imp_->input_vel_this_, imp_->input_vel_last_);
+				aris::dynamic::s_vc(imp_->input_size_, imp_->input_pos_this_, imp_->input_vel_this_);
+				aris::dynamic::s_vs(imp_->input_size_, imp_->input_pos_last_, imp_->input_vel_this_);
+				aris::dynamic::s_nv(imp_->input_size_, 1.0 / imp_->tg_->dt(), imp_->input_vel_this_);
+
+				// 保存加速度 //
+				aris::dynamic::s_vc(imp_->input_size_, imp_->input_vel_this_, imp_->input_acc_this_);
+				aris::dynamic::s_vs(imp_->input_size_, imp_->input_vel_last_, imp_->input_acc_this_);
+				aris::dynamic::s_nv(imp_->input_size_, 1.0 / imp_->tg_->dt(), imp_->input_acc_this_);
+				
 				return imp_->singular_ret_;
 			}
 			else {
-				// 上一次的数据，才是真正开始的值 //
-				aris::dynamic::s_vc(imp_->input_size_, imp_->input_pos_last_, imp_->input_pos_begin_);
-				aris::dynamic::s_vc(imp_->input_size_, imp_->input_vel_last_, imp_->input_vel_begin_);
 #ifdef ARIS_DEBUG_SINGULAR_PROCESSOR
 				std::cout << "singular" << std::endl;
 #endif

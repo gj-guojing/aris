@@ -35,25 +35,25 @@ auto test_singular_processor_1()->void {
 		{ 10, 10 },
 		{ 0.1, 0.1 },
 		{ 0.1, 0.1 },
-		{ 10, 10 },
-		{ 10, 10 },
-		{ 10, 10 },
+		{ 1000, 1000 },
+		{ 1000, 1000 },
+		{ 1000, 1000 },
 	};
 	double accs[PE_SIZE][2 * EE_NUM + A_NUM]{
 		{ 10, 10 },
 		{ 0.1, 0.1 },
 		{ 0.1, 0.1 },
-		{ 10, 10 },
-		{ 10, 10 },
-		{ 10, 10 },
+		{ 10000, 10000 },
+		{ 10000, 10000 },
+		{ 10000, 10000 },
 	};
 	double jerks[PE_SIZE][2 * EE_NUM + A_NUM]{
 		{ 100, 100 },
 		{ 0.1, 0.1 },
 		{ 0.1, 0.1 },
-		{ 100, 100 },
-		{ 100, 100 },
-		{ 100, 100 },
+		{ 10000000, 1000000 },
+		{ 10000000, 1000000 },
+		{ 10000000, 1000000 },
 	};
 	double zones[PE_SIZE][2 * EE_NUM + A_NUM]{
 		{ 0.2, 0.2 },
@@ -124,6 +124,18 @@ auto test_singular_processor_1()->void {
 	double out_vel[16]{}, out_acc[16]{};
 	while (sp.setModelPosAndMoveDt()) {
 		m++;
+
+		if (m > 3000 && m < 6000)
+			sp.setTargetDs(0.0);
+		else
+			sp.setTargetDs(1.0);
+
+		if (m == 6000) {
+			std::cout << "debug" << std::endl;
+		}
+
+
+
 		vec.resize(m * (6 * EE_NUM + A_NUM), 0.0);
 		v_vec.resize(m * (6 * EE_NUM + A_NUM), 0.0);
 		a_vec.resize(m * (6 * EE_NUM + A_NUM), 0.0);
