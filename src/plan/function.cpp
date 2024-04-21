@@ -147,7 +147,7 @@ namespace aris::plan
 			double lower_bound = pt - pa < 0.0 ? std::min(dm, -va / dt) : std::max(-dm, -va / dt);
 			double upper_bound = pt - pa < 0.0 ? std::max(-am, (-vm - va) / dt) : std::min(am, (vm - va) / dt);
 
-			while (std::abs(lower_bound - upper_bound) > zero_check)
+			while (std::abs(lower_bound - upper_bound) > zero_check * (std::max({ std::abs(lower_bound), std::abs(upper_bound), 1.0})))
 			{
 				const double a1 = (lower_bound + upper_bound) / 2.0;
 				const double v1 = va + a1 * dt;
@@ -174,4 +174,8 @@ namespace aris::plan
 		total_count = 1;
 		return std::abs(pt - pc) < zero_check && std::abs(vt - vc) < zero_check ? 0 : 1;
 	}
+
+
+
+
 }

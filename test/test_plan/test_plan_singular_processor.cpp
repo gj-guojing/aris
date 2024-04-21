@@ -10,7 +10,7 @@ auto test_singular_processor_1()->void {
 	// 构造 TG //
 	aris::plan::TrajectoryGenerator tg;
 
-	const int PE_SIZE = 3;
+	const int PE_SIZE = 6;
 	const int EE_NUM = 1;
 	const int A_NUM = 0;
 
@@ -25,6 +25,9 @@ auto test_singular_processor_1()->void {
 		{ 0.45, 0.4, 0.75,   aris::PI, 1.0,   aris::PI},
 		{ 0.45, 0.0, 0.75,   aris::PI, 1.0,   aris::PI},
 		{ 0.45, 0.0, 0.65,   aris::PI, 1.0,   aris::PI},
+		{ 0.45, 0.0, 0.65,   aris::PI / 4, aris::PI / 2,   aris::PI / 4},
+		{ 0.45, 0.0, 0.75,   aris::PI / 4, aris::PI / 2,   aris::PI / 4},
+		{ 0.45, 0.1, 0.75,   aris::PI / 4, aris::PI / 2,   aris::PI / 4},
 	};
 
 	//  MAKE VELS ACCS JERKS ZONES ... //
@@ -32,21 +35,33 @@ auto test_singular_processor_1()->void {
 		{ 10, 10 },
 		{ 0.1, 0.1 },
 		{ 0.1, 0.1 },
+		{ 10, 10 },
+		{ 10, 10 },
+		{ 10, 10 },
 	};
 	double accs[PE_SIZE][2 * EE_NUM + A_NUM]{
 		{ 10, 10 },
 		{ 0.1, 0.1 },
 		{ 0.1, 0.1 },
+		{ 10, 10 },
+		{ 10, 10 },
+		{ 10, 10 },
 	};
 	double jerks[PE_SIZE][2 * EE_NUM + A_NUM]{
 		{ 100, 100 },
 		{ 0.1, 0.1 },
 		{ 0.1, 0.1 },
+		{ 100, 100 },
+		{ 100, 100 },
+		{ 100, 100 },
 	};
 	double zones[PE_SIZE][2 * EE_NUM + A_NUM]{
 		{ 0.2, 0.2 },
 		{ 0.0, 0.0 },
 		{ 0.1, 0.1 },
+		{ 0.0, 0.0 },
+		{ 0.0, 0.0 },
+		{ 0.0, 0.0 },
 	};
 
 	for (int i = 0; i < PE_SIZE; ++i) {
@@ -69,17 +84,28 @@ auto test_singular_processor_1()->void {
 	puma->setOutputPos(init_pe);
 	puma->inverseKinematics();
 
+	dynamic_cast<aris::dynamic::GeneralMotion&>(puma->generalMotionPool()[0]).setPoseType(aris::dynamic::GeneralMotion::PoseType::EULER321);
+	double input_init[6]{ 0,0,0,0,0,0 };
+	puma->setInputPos(input_init);
+	puma->forwardKinematics();
+	double pm[16];
+	puma->getOutputPos(pm);
+	aris::dynamic::dsp(1, 16, pm);
+
+
 	//  这里处理 //
 	aris::plan::SingularProcessor sp;
 
 	// 最大速度、加速度 //
 	std::vector<double> max_vels{ 3.14, 3.14, 3.14, 3.14, 3.14, 3.14 };
 	std::vector<double> max_accs{ 31.4, 31.4, 31.4, 31.4, 31.4, 31.4 };
+	std::vector<double> max_jerks{ 314, 314, 314, 314, 314, 314 };
 
 	// 设置模型等参数 //
 	sp.setModel(*puma);
 	sp.setMaxVels(max_vels.data());
 	sp.setMaxAccs(max_accs.data());
+	sp.setMaxJerks(max_jerks.data());
 	sp.setTrajectoryGenerator(tg);
 	//sp.setInverseKinematicMethod([](aris::dynamic::ModelBase &model, const double *output) {
 	//	model
@@ -90,7 +116,7 @@ auto test_singular_processor_1()->void {
 	sp.init();
 
 	// 设置速度百分比 //
-	sp.setDs(0.5);
+	//sp.setDs(0.5);
 
 	// 打印数据 //
 	std::vector<double> vec, v_vec, a_vec;

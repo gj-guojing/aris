@@ -29,6 +29,7 @@ namespace aris::plan{
 		auto setTrajectoryGenerator(TrajectoryGenerator& tg)->void;
 		auto setMaxVels(const double* max_vels)->void;
 		auto setMaxAccs(const double* max_accs)->void;
+		auto setMaxJerks(const double* max_jerks) -> void;
 		auto init()->void;
 		
 		// 设置速度百分比，类似 TG 中 setTargetDs

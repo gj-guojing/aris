@@ -236,19 +236,500 @@ namespace aris::plan {
 				return  pe - ve * (T - t);
 	}
 
+	struct SmoothParam {
+		double dt;
+		int dim;
+		const double *min_dp, * max_dp, *min_d2p, * max_d2p, *min_d3p, * max_d3p;
+		double ds1, ds2, ds3;
+		double* p0, *p1, *p2, *p3;
+
+		double target_ds;
+	};
+	struct SmoothRet {
+		double next_ds;
+	};
+	auto s_smooth_curve(const SmoothParam &param, SmoothRet &ret) -> int {
+		
+		///////////////////////////// PART 1 计算 d3s 的可选范围 ///////////////////////////////// 
+		// 
+		// 
+		// 
+		// 
+		// % 以下考虑约束条件
+		//% 【COND 1】经过 dt 时间后，速度不超过上下限
+		//%  
+		//%  dp_min < dp3 + (d2p3 + d3p25*dt)*dt < dp_max
+		//%  =>
+		//%  (dp_min - dp3 - d2p3*dt - g*dt*dt)/k/dt/dt 
+		//%  <
+		//%    d3s
+		//%  <
+		//%  (dp_max - dp3 - d2p3*dt - g*dt*dt)/k/dt/dt 
+		//% 【COND 2】经过 dt 时间后，加速度不超过上下限
+		//%
+		//%  d2p_min < d2p3 + d3p_25 * dt < d2p_max
+		//%
+		//%  (d2p_min - d2p3 - g*dt)/k/dt
+		//%
+		//% 【COND 3】jerk 不超过上下限
+		//%
+		//%  d3p_min < d3p_25 < d3p_max
+		//% 
+		//% 【COND 4】jerk 不超过考虑速度与加速度的上下限
+		//%
+		//%  d2p_min2 < d2p3 + d3p_25 * dt < d2p_max2
+		//%
+		//%
+		//% 【COND 4】推导如下：
+		//%
+		//%  将加速度减为0，所需时间：T = abs(d2p)/d3p_max
+		//%  减为0时的速度：dp + T*d2p/2
+		//%  dp_min < dp + T*d2p/2 < dp_max
+		//%  =>
+		//%  dp_min-dp < T*d2p/2 < dp_max-dp
+		//%  2*(dp_min-dp)*d3p_max < sig(d2p)*d2p*d2p < 2*(dp_max-dp)*d3p_max
+		//%  => 
+		//%  d2p < 0时
+		//%    d2p > -sqrt(2*(dp-dp_min)*d3p_max)
+		//%  d2p > 0时
+		//%    d2p < sqrt(2*(dp_max-dp)*d3p_max)
+		//% 
+		//%  考虑经过dt，则应有：
+		//%  
+		//%  d2p < 0时
+		//%    d2p > -sqrt(2*(dp-dp_min-d2p_max*dt)*d3p_max)
+		//%  d2p > 0时
+		//%    d2p < sqrt(2*(dp_max-dp-d2p_max*dt)*d3p_max)
+		// 
+		// 应有以下等式：
+		// dp_min  < dp  < dp_max
+		// d2p_min < d2p < d2p_max
+		// d3p_min < d3p < d3p_max
+		//
+		// dp  = dp_ds * ds
+		// d2p = d2p_ds2 * ds^2 + dp_ds * d2s
+		// d3p = d3p_ds3 * ds^3 + 2 * d2p_ds2 * ds * d2s + d2p_ds2 * ds * d2s + dp_ds * d3s
+		//     = d3p_ds3 * ds^3 + 3 * d2p_ds2 * ds * d2s + dp_ds * d3s
+		//
+		// 带入上述不等式，应有：
+		//                    dp_min/dp_ds < ds  < dp_max/dp_ds
+		//  (d2p_max-d2p_ds2 * ds^2)/dp_ds < d2s < (d2p_max-d2p_ds2 * ds^2)/dp_ds
+		//               (d3p_min-f)/dp_ds < d3s < (d3p_max-f)/dp_ds
+		//
+		// 其中 f = d3p_ds2 * ds^3 + 3 * d2p_ds * ds * d2s
+		// 
+		// 若 dp_ds < 0，则上式左右相反。
+		//
+		// 上式仅考虑了电机端的输入，没有考虑加速度将为 0 也需要时间。此时：
+		//
+		//       dp_min  <  dp + d2p * T + 0.5 * d3p * T^2  <  dp_max
+		//                                  
+		// 中间式子在 T = -d2p/d3p 时取到极值，大小为：
+		//    
+		//       dp - 0.5*d2p*d2p/d3p
+		//
+		// 若 d2p < 0 && dp_ds < 0，则应有 d3p > 0：
+		//       dp_min < dp - 0.5*d2p*d2p/d3p
+		// =>    d2p*d2p/d3p < 2*(dp-dp_min)
+		// =>    d3p > d2p*d2p/(2(dp-dp_min))
+		// =>    d3s < (d2p*d2p/(2(dp-dp_min)) - f)/dp_ds
+		// 		
+		// 若 d2p > 0 && dp_ds > 0，则应有 d3p > 0：
+		//
+		//       d3p < d2p*d2p/(2(dp_max-dp))
+		// =>    d3s < (d2p*d2p/(2(dp-dp_max)) - f)/dp_ds
+		//
+		// 考虑加速度不超限，应有：
+		// 
+		//                           d2p_min  < d2p + d3p*dt < d2p_max
+		// =>             (d2p_min - d2p)/dt  <      d3p     <  (d2p_max - d2p)/dt
+		// =>  ((d2p_min - d2p)/dt - f)/dp_ds <      d3s     <  ((d2p_max - d2p)/dt - f)/dp_ds
+		// 
+		///////////////////////////// PART 2 计算其中的数据 ///////////////////////////////// 
+		// t0        t1   t15   t2   t25   t3
+		//
+		// p0        p1         p2         p3
+		//     dp1        dp2        dp3
+		//          d2p2       d2p3
+		//               d3p3
+		//  
+		// s0        s1         s2         s3
+		//     ds1        ds2        ds3
+		//          d2s2       d2s3
+		//               d3s3
+		//
+		// 
+		//
+		// at point t=1.5:
+		//
+		// dp_ds_t15   = dp_t15/ds_t15
+		// d2p_ds2_t15 = (d2p_t15 - dp_ds_t15 * d2s_t15)/ds_t15^2
+		// d3p_ds3_t15 = (d3p_t15 - 3 * d2p_ds2_t15 * ds_t15 * d2s_t15 - dp_ds_t15 * d3s_t15)/ds_t15^3
+		// 
+		// at point t=2.5:
+		// 
+		// ds_t25 = ds3
+		// d2s_25 = d2s_t15 + (d3s_t15+d3s_25)/2*dt
+		// 
+		// d3p_ds3_t25 = d3p_ds3_t15
+		// d2p_ds2_t25 = d2p_ds2_t15 + d3p_ds3_t15 * (s_25 - s_15)
+		// dp_ds_t25   = dp_ds_t15 + d2p_ds2_t15 * (s_25 - s_15) + 0.5 * d3p_ds3_t15 * (s_25 - s_15)^2
+		// 
+		// f_25 = d3p_ds3_t25 * ds_t25^3 + 3 * d2p_ds2_t25 * ds_t25 * d2s_25
+		//      = d3p_ds3_t25 * ds_t25^3 + 3 * d2p_ds2_t25 * ds_t25 * (d2s_t15 + (d3s_t15+d3s_25)/2*dt)
+		//      = d3p_ds3_t25 * ds_t25^3 + 3 * d2p_ds2_t25 * ds_t25 * (d2s15 + d3s_t15*dt/2) + g*dp_ds_t25* d3s_25
+		//      = k + g*dp_ds_t25* d3s_25
+		// 
+		// 其中:
+		//    k = d3p_ds3_t25 * ds_t25^3 + 3 * d2p_ds2_t25 * ds_t25 * (d2s15 + d3s_t15*dt/2)
+		//    g = 3 * d2p_ds2_t25 * ds_t25 /2 * dt / dp_ds_t25
+		// 
+		// 根据以下3个不等式，可求出 d3s 的许可范围：
+		//                 (d3p_min-f_25)/dp_ds_t25 < d3s_25 < (d3p_max-f_25)/dp_ds_t25
+		// ((d2p_min - d2p_25)/dt - f_25)/dp_ds_t25 < d3s_25 < ((d2p_max - d2p_25)/dt - f_25)/dp_ds_t25
+		//                                           d3s_25 < (d2p_25*d2p_25/(2(dp_25-dp_max)) - f_25)/dp_ds_t25
+		// 
+		// => 
+		// 
+		// 			                (d3p_min-k)/r < d3s_25 < (d3p_max-k)/r
+		//          ((d2p_min - d2p_25)/dt - k)/r < d3s_25 < ((d2p_max - d2p_25)/dt - k)/r
+		//                                          d3s_25 < (d2p_25*d2p_25/(2(dp_25-dp_max)) - k)/r
+		// 
+		// 其中 r = (1+g) * dp_ds_t25 = dp_ds_t25 + 3 * d2p_ds2_t25 * ds_t25 /2 * dt
+		// 
+		// 其中 不等式1 和 2 左右需要根据dp_ds_t25 的符号进行切换
+		
+		double zero_check = 1e-10;
+		
+		const double MAX_DS = 1.0;
+		const double MIN_DS = 0.005;
+		const double MAX_D2S = 10.0;
+		const double MIN_D2S = -10.0;
+		const double MAX_D3S = 10000.0;
+		const double MIN_D3S = -10000.0;
+
+		const double VEL_BOUND_RATIO = 0.99;
+		const double ACC_BOUND_RATIO = 0.9;
+		const double JERK_BOUND_RATIO = 0.999;
+		
+
+		double dt = param.dt;
+		auto dim = param.dim;
+
+		auto target_ds = param.target_ds;
+		auto ds1 = param.ds1;
+		auto ds2 = param.ds2;
+		auto ds3 = param.ds3;
+
+		auto p3 = param.p3;
+		auto p2 = param.p2;
+		auto p1 = param.p1;
+		auto p0 = param.p0;
+		
+		auto dp_max = param.max_dp;
+		auto dp_min = param.min_dp;
+		auto d2p_max = param.max_d2p;
+		auto d2p_min = param.min_d2p;
+		auto d3p_max = param.max_d3p;
+		auto d3p_min = param.min_d3p;
+
+		auto d2s2 = (ds2 - ds1) / dt;
+		auto d2s3 = (ds3 - ds2) / dt;
+		auto d3s3 = (d2s3 - d2s2) / dt;
+
+		double ds_t15 = ds2;
+		double d2s_t15 = (d2s2 + d2s3) / 2;
+		double d3s_t15 = d3s3;
+		double ds_t25 = ds3;
+
+		double d3s_min_1 = -1e10;
+		double d3s_max_1 = 1e10;
+		double d3s_min_2 = -1e10;
+		double d3s_max_2 = 1e10;
+		double d3s_min_3 = -1e10;
+		double d3s_max_3 = 1e10;
+		double d3s_min_4 = -1e10;
+		double d3s_max_4 = 1e10;
+
+		for (int i = 0; i < dim; ++i) {
+			auto dp3 = (p3[i] - p2[i]) / dt;
+			auto dp2 = (p2[i] - p1[i]) / dt;
+			auto dp1 = (p1[i] - p0[i]) / dt;
+
+			auto d2p3 = (dp3 - dp2) / dt;
+			auto d2p2 = (dp2 - dp1) / dt;
+			
+			auto d3p3 = (d2p3 - d2p2) / dt;
+
+			//dp3[i] = (p3[i] - p2[i]) / dt;
+			//d2p3[i] = (dp3 - dp2) / dt;
+			//d3p3[i] = (d2p3[i] - d2p2[i]) / dt;
+
+			auto dp_t15 = dp2;
+			auto d2p_t15 = (d2p2 + d2p3) / 2;
+			auto d3p_t15 = d3p3;
+
+			auto dp_ds_t15 = dp_t15 / ds_t15;
+			auto d2p_ds2_t15 = (d2p_t15 - dp_ds_t15 * d2s_t15) / ds_t15 / ds_t15;
+			auto d3p_ds3_t15 = (d3p_t15 - 3 * d2p_ds2_t15 * ds_t15 * d2s_t15 - dp_ds_t15 * d3s_t15) / ds_t15 / ds_t15 / ds_t15;
+
+			auto s25_s15 = (ds2 + ds3) / 2 * dt;
+			auto d3p_ds3_t25 = d3p_ds3_t15;
+			auto d2p_ds2_t25 = d2p_ds2_t15 + d3p_ds3_t15 * s25_s15;
+			auto dp_ds_t25 = dp_ds_t15 + d2p_ds2_t15 * s25_s15 + 0.5 * d3p_ds3_t15 * s25_s15 * s25_s15;
+
+			double k = (dp_ds_t25 + (3 * d2p_ds2_t25 * ds_t25 * dt) / 2);
+			double g = d3p_ds3_t25 * ds_t25 * ds_t25 * ds_t25 + 3 * d2p_ds2_t25 * (d2s2 / 2 + d2s3 / 2 + (d3s3 * dt) / 2) * ds_t25;
+
+			if (std::abs(k) > zero_check) {
+				auto d3s_l1 = (-dp_max[i] * VEL_BOUND_RATIO - dp3 - d2p3 * dt - g * dt * dt) / k / dt / dt;
+				auto d3s_r1 = (dp_max[i] * VEL_BOUND_RATIO - dp3 - d2p3 * dt - g * dt * dt) / k / dt / dt;
+				
+				auto d3s_l2 = (-d2p_max[i] * ACC_BOUND_RATIO - d2p3 - g * dt) / k / dt;
+				auto d3s_r2 = (d2p_max[i] * ACC_BOUND_RATIO - d2p3 - g * dt) / k / dt;
+
+				auto d3s_l3 = (-d3p_max[i] * JERK_BOUND_RATIO - g) / k;
+				auto d3s_r3 = (d3p_max[i] * JERK_BOUND_RATIO - g) / k;
+
+				auto d2p_min2 = -std::sqrt(std::max(2 * (dp3 + dp_max[i] * VEL_BOUND_RATIO + d2p3 * dt) * d3p_max[i] * JERK_BOUND_RATIO, 0.0));
+				auto d2p_max2 = std::sqrt(std::max(2 * (dp_max[i] * VEL_BOUND_RATIO - dp3 - d2p3 * dt) * d3p_max[i] * JERK_BOUND_RATIO, 0.0));
+				auto d3s_l4 = (d2p_min2 - d2p3 - g * dt) / k / dt;
+				auto d3s_r4 = (d2p_max2 - d2p3 - g * dt) / k / dt;
+
+				if (k < 0) {
+					std::swap(d3s_l1, d3s_r1);
+					std::swap(d3s_l2, d3s_r2);
+					std::swap(d3s_l3, d3s_r3);
+					std::swap(d3s_l4, d3s_r4);
+				}
+
+				d3s_min_1 = std::max(d3s_l1, d3s_min_1);
+				d3s_max_1 = std::min(d3s_r1, d3s_max_1);
+				d3s_min_2 = std::max(d3s_l2, d3s_min_2);
+				d3s_max_2 = std::min(d3s_r2, d3s_max_2);
+				d3s_min_3 = std::max(d3s_l3, d3s_min_3);
+				d3s_max_3 = std::min(d3s_r3, d3s_max_3);
+				d3s_min_4 = std::max(d3s_l4, d3s_min_4);
+				d3s_max_4 = std::min(d3s_r4, d3s_max_4);
+
+			}
+		}
+
+		double d3s_min_12 = std::max({
+			d3s_min_1,
+			d3s_min_2,
+			});
+		double d3s_max_12 = std::min({
+			d3s_max_1,
+			d3s_max_2,
+			});
+		double d3s_min_124 = std::max({
+			d3s_min_1,
+			d3s_min_2,
+			d3s_min_4,
+			});
+		double d3s_max_124 = std::min({
+			d3s_max_1,
+			d3s_max_2,
+			d3s_max_4,
+			});
+		double d3s_min_all = std::max({
+			d3s_min_1,
+			d3s_min_2,
+			d3s_min_3,
+			d3s_min_4,
+			});
+		double d3s_max_all = std::min({
+			d3s_max_1,
+			d3s_max_2,
+			d3s_max_3,
+			d3s_max_4,
+			});
+
+		double next_ds, next_d2s, next_d3s{ 0.0 };
+
+		// 0. ds 过小、无法通过ds 判断出原始轨迹的曲率等
+		if (ds3 <= zero_check) {
+			aris::Size total_count;
+			s_follow_x(ds3, d2s3, target_ds, MAX_D2S, MIN_D2S, MAX_D3S, MIN_D3S, dt, zero_check, next_ds, next_d2s, next_d3s, total_count);
+			goto next_step;
+		}
+
+		// 1. 原始轨迹在起始点，可以直接加速到想要的 ds
+		if (d3s_max_all >= 1e9 && d3s_min_all < -1e9 && ds3 > zero_check) {
+			next_ds = ds2 = ds3 = target_ds;
+			goto next_step;
+		}
+
+		// 2. 可以在COND 1234不超限的情况下，完成规划
+		auto d3s_max = d3s_max_all;
+		auto d3s_min = d3s_min_all;
+		if (d3s_max > d3s_min) {
+			bool is_avalable = false;
+			if (ds3 > 0.5) {
+				if (d2s3 > 0.0) {
+					// diff_ds = 0.5* d3s_min * T^2
+					// 
+					// T = d2s / d3s_min
+					// 
+					// => diff_ds = 0.5* d2s^2 / d3s_min
+					auto d3s_desired = ds3 < MAX_DS ? -d2s3 * d2s3 / ((MAX_DS - (ds3)) * 2.0) : 0.0;
+					is_avalable = d3s_desired > d3s_min;
+
+					auto d2s_desired = std::sqrt(std::max(-d3s_min * (MAX_DS - (ds3 + d2s3 * dt + 0.5 * d3s_max * dt*dt))*2.0, 0.0));
+					d3s_max = std::min(d3s_max, (d2s_desired - d2s3) / dt);
+				}
+				else {
+					is_avalable = true;
+				}
+			}
+			else {
+				if (d2s3 > 0.0) {
+					is_avalable = true;
+				}
+				else {
+					auto d3s_desired = ds3 > MIN_DS ? -d2s3 * d2s3 / ((MIN_DS - ds3) * 2.0) : 0.0;
+					is_avalable = d3s_desired < d3s_max;
+
+					auto d2s_desired = -std::sqrt(std::max(d3s_max * (MIN_DS - (ds3 + d2s3 * dt + 0.5 * d3s_min * dt * dt)) * 2.0, 0.0));
+					d3s_min = std::max(d3s_min, (d2s_desired - d2s3) / dt);
+				}
+			}
+			if (is_avalable) {
+				aris::Size total_count;
+				s_follow_x(ds3, d2s3, target_ds, MAX_D2S, MIN_D2S, d3s_max, d3s_min, dt, zero_check, next_ds, next_d2s, next_d3s, total_count);
+				goto next_step;
+			}
+		}
+
+		// 3. 可以在COND 124不超限的情况下，完成规划
+		d3s_max = d3s_max_124;
+		d3s_min = d3s_min_124;
+		if (d3s_max > d3s_min) {
+			bool is_avalable = false;
+			if (ds3 > 0.5) {
+				if (d2s3 > 0.0) {
+					auto d3s_desired = ds3 < MAX_DS ? -d2s3 * d2s3 / ((MAX_DS - ds3) * 2.0) : 0.0;
+					is_avalable = d3s_desired > d3s_min;
+					d3s_max = std::min(d3s_desired, d3s_max);
+					//d3s_min = d3s_desired;
+				}
+				else {
+					is_avalable = true;
+				}
+			}
+			else {
+				if (d2s3 > 0.0) {
+					is_avalable = true;
+				}
+				else {
+					auto d3s_desired = ds3 > MIN_DS ? -d2s3 * d2s3 / ((MIN_DS - ds3) * 2.0) : 0.0;
+					is_avalable = d3s_desired < d3s_max;
+					//d3s_max = d3s_desired;
+					d3s_min = std::max(d3s_desired, d3s_min);
+				}
+			}
+			if (is_avalable) {
+				aris::Size total_count;
+				s_follow_x(ds3, d2s3, target_ds, MAX_D2S, MIN_D2S, d3s_max, d3s_min, dt, zero_check, next_ds, next_d2s, next_d3s, total_count);
+				goto next_step;
+			}
+		}
+
+		// 4. 可以在COND 12不超限的情况下，完成规划
+		d3s_max = d3s_max_12;
+		d3s_min = d3s_min_12;
+		if (d3s_max > d3s_min) {
+			bool is_avalable = false;
+			if (ds3 > 0.5) {
+				if (d2s3 > 0.0) {
+					auto d3s_desired = ds3 < MAX_DS ? -d2s3 * d2s3 / ((MAX_DS - ds3) * 2.0) : 0.0;
+					is_avalable = d3s_desired > d3s_min;
+					d3s_max = std::min(d3s_desired, d3s_max);
+				}
+				else {
+					is_avalable = true;
+				}
+			}
+			else {
+				if (d2s3 > 0.0) {
+					is_avalable = true;
+				}
+				else {
+					auto d3s_desired = ds3 > MIN_DS ? -d2s3 * d2s3 / ((MIN_DS - ds3) * 2.0) : 0.0;
+					is_avalable = d3s_desired < d3s_max;
+					d3s_min = std::max(d3s_desired, d3s_min);
+				}
+			}
+			if (is_avalable) {
+				aris::Size total_count;
+				s_follow_x(ds3, d2s3, target_ds, 1e9, -1e9, d3s_max, d3s_min, dt, zero_check, next_ds, next_d2s, next_d3s, total_count);
+				goto next_step;
+			}
+		}
+
+		// 5. 只考虑减速环节
+		{
+			aris::Size total_count;
+			s_follow_x(ds3, d2s3, MIN_DS, MAX_D2S, MIN_D2S, MAX_D3S, MIN_D3S, dt, zero_check, next_ds, next_d2s, next_d3s, total_count);
+		}
+
+
+
+
+
+
+	next_step:
+
+#ifdef ARIS_DEBUG_SINGULAR_PROCESSOR
+		static int count_{ 0 };
+		//std::cout << "count: " << count_++ << std::endl;
+
+		if (count_ > 380 && count_ < 400) {
+			std::cout << "bound:" << d3s_max_all << "  " << d3s_min_all << std::endl;
+			std::cout << "next_d3s:" << next_d3s << std::endl;
+			//aris::dynamic::dsp(1, 6, d3s_l1.data());
+			//aris::dynamic::dsp(1, 6, d3s_r1.data());
+			//aris::dynamic::dsp(1, 6, d3s_l2.data());
+			//aris::dynamic::dsp(1, 6, d3s_r2.data());
+			//aris::dynamic::dsp(1, 6, d3s_l3.data());
+			//aris::dynamic::dsp(1, 6, d3s_r3.data());
+			//aris::dynamic::dsp(1, 6, d3s_l4.data());
+			//aris::dynamic::dsp(1, 6, d3s_r4.data());
+
+			if (count_ == 180) {
+				std::cout << "debug" << std::endl;
+			}
+			//return 0;
+		}
+
+#endif // ARIS_DEBUG_SINGULAR_PROCESSOR
+
+		next_d2s = d2s3 + next_d3s * dt;
+		next_ds = ds3 + next_d2s * dt;
+
+		next_ds = std::min(next_ds, MAX_DS);
+		next_ds = std::max(next_ds, std::min(MIN_DS, target_ds));
+
+		ret.next_ds = next_ds;
+		return 0;
+	};
+
+
 	struct SingularProcessor::Imp {
 		using CurveParam = TcurveParam;
 
 		InverseKinematicMethod inv_func_;
 
 		aris::Size input_size_{ 0 };
-		//double dt_{ 0.001 };
-
-
 
 		std::vector<char> mem_;
 		double* max_vels_,
 			* max_accs_,
+			* max_jerks_,
+			* min_vels_,
+			* min_accs_,
+			* min_jerks_,
 			* input_pos_begin_,
 			* input_vel_begin_,
 			* input_acc_begin_,
@@ -263,7 +744,11 @@ namespace aris::plan {
 			* input_acc_ratio_,
 			* input_acc_max_consider_ratio_,
 			* input_acc_min_consider_ratio_,
-			* output_pos_;
+			* output_pos_,
+			* p0_,
+			* p1_,
+			* p2_,
+			* p3_;
 
 		std::int64_t singular_ret_{ 0 };
 		aris::Size total_singular_count_{ 0 }, current_singular_count_{ 0 };
@@ -275,9 +760,9 @@ namespace aris::plan {
 		double check_rate_{ 0.99 };
 		double max_vel_ratio_{ 0.95 };
 		double max_acc_ratio_{ 0.9 };
-		double current_ds_{ 1.0 }, // 类似 tg 中的 ds，但是在降速的时候，它其实是系统的上界，真实的 tg 里的ds 并不一定是这个值
-			target_ds_{ 1.0 },  // 类似 tg 中的 target_ds，它是ds 追赶的目标
-			last_dds{ 0.0 };
+		double target_ds_{ 1.0 };
+
+		double ds1_{ 1.0 }, ds2_{ 1.0 }, ds3_{ 1.0 };
 		
 		aris::dynamic::ModelBase* model_{ nullptr };
 		aris::plan::TrajectoryGenerator* tg_{ nullptr };
@@ -296,9 +781,24 @@ namespace aris::plan {
 	};
 	auto SingularProcessor::setMaxVels(const double* max_vels)->void {
 		std::copy(max_vels, max_vels + imp_->input_size_, imp_->max_vels_);
+		std::copy(max_vels, max_vels + imp_->input_size_, imp_->min_vels_);
+
+		for (int i = 0; i < imp_->input_size_; ++i)
+			imp_->min_vels_[i] = -imp_->min_vels_[i];
 	}
 	auto SingularProcessor::setMaxAccs(const double* max_accs)->void {
 		std::copy(max_accs, max_accs + imp_->input_size_, imp_->max_accs_);
+		std::copy(max_accs, max_accs + imp_->input_size_, imp_->min_accs_);
+
+		for (int i = 0; i < imp_->input_size_; ++i)
+			imp_->min_accs_[i] = -imp_->min_accs_[i];
+	}
+	auto SingularProcessor::setMaxJerks(const double* max_jerks) -> void {
+		std::copy(max_jerks, max_jerks + imp_->input_size_, imp_->max_jerks_);
+		std::copy(max_jerks, max_jerks + imp_->input_size_, imp_->min_jerks_);
+
+		for (int i = 0; i < imp_->input_size_; ++i)
+			imp_->min_jerks_[i] = -imp_->min_jerks_[i];
 	}
 	auto SingularProcessor::setMaxVelRatio(double vel_ratio)->void {
 		imp_->max_vel_ratio_ = vel_ratio;
@@ -313,6 +813,10 @@ namespace aris::plan {
 		Size mem_size = 0;
 		core::allocMem(mem_size, imp_->max_vels_, imp_->input_size_);
 		core::allocMem(mem_size, imp_->max_accs_, imp_->input_size_);
+		core::allocMem(mem_size, imp_->max_jerks_, imp_->input_size_);
+		core::allocMem(mem_size, imp_->min_vels_, imp_->input_size_);
+		core::allocMem(mem_size, imp_->min_accs_, imp_->input_size_);
+		core::allocMem(mem_size, imp_->min_jerks_, imp_->input_size_);
 		core::allocMem(mem_size, imp_->input_pos_begin_, imp_->input_size_);
 		core::allocMem(mem_size, imp_->input_vel_begin_, imp_->input_size_);
 		core::allocMem(mem_size, imp_->input_pos_end_, imp_->input_size_);
@@ -327,11 +831,19 @@ namespace aris::plan {
 		core::allocMem(mem_size, imp_->input_acc_min_consider_ratio_, imp_->input_size_);
 		core::allocMem(mem_size, imp_->output_pos_, imp_->input_size_);
 		core::allocMem(mem_size, imp_->curve_params_, imp_->input_size_);
+		core::allocMem(mem_size, imp_->p0_, imp_->input_size_);
+		core::allocMem(mem_size, imp_->p1_, imp_->input_size_);
+		core::allocMem(mem_size, imp_->p2_, imp_->input_size_);
+		core::allocMem(mem_size, imp_->p3_, imp_->input_size_);
 
 		imp_->mem_.resize(mem_size, char(0));
 
 		imp_->max_vels_ = core::getMem(imp_->mem_.data(), imp_->max_vels_);
 		imp_->max_accs_ = core::getMem(imp_->mem_.data(), imp_->max_accs_);
+		imp_->max_jerks_ = core::getMem(imp_->mem_.data(), imp_->max_jerks_);
+		imp_->min_vels_ = core::getMem(imp_->mem_.data(), imp_->min_vels_);
+		imp_->min_accs_ = core::getMem(imp_->mem_.data(), imp_->min_accs_);
+		imp_->min_jerks_ = core::getMem(imp_->mem_.data(), imp_->min_jerks_);
 		imp_->input_pos_begin_ = core::getMem(imp_->mem_.data(), imp_->input_pos_begin_);
 		imp_->input_vel_begin_ = core::getMem(imp_->mem_.data(), imp_->input_vel_begin_);
 		imp_->input_acc_begin_ = core::getMem(imp_->mem_.data(), imp_->input_acc_begin_);
@@ -348,6 +860,10 @@ namespace aris::plan {
 		imp_->input_acc_min_consider_ratio_ = core::getMem(imp_->mem_.data(), imp_->input_acc_min_consider_ratio_);
 		imp_->output_pos_ = core::getMem(imp_->mem_.data(), imp_->output_pos_);
 		imp_->curve_params_ = core::getMem(imp_->mem_.data(), imp_->curve_params_);
+		imp_->p0_ = core::getMem(imp_->mem_.data(), imp_->p0_);
+		imp_->p1_ = core::getMem(imp_->mem_.data(), imp_->p1_);
+		imp_->p2_ = core::getMem(imp_->mem_.data(), imp_->p2_);
+		imp_->p3_ = core::getMem(imp_->mem_.data(), imp_->p3_);
 	}
 	auto SingularProcessor::setTrajectoryGenerator(TrajectoryGenerator& tg)->void {
 		imp_->tg_ = &tg;
@@ -358,15 +874,20 @@ namespace aris::plan {
 		std::fill_n(imp_->input_acc_this_, imp_->input_size_, 0.0);
 		std::fill_n(imp_->input_vel_last_, imp_->input_size_, 0.0);
 
-		imp_->current_ds_ = imp_->target_ds_;
-		imp_->last_dds = 0.0;
+		imp_->model_->getInputPos(imp_->p0_);
+		aris::dynamic::s_vc(imp_->input_size_, imp_->p0_, imp_->p1_);
+		aris::dynamic::s_vc(imp_->input_size_, imp_->p0_, imp_->p2_);
+		aris::dynamic::s_vc(imp_->input_size_, imp_->p0_, imp_->p3_);
+
+		imp_->ds1_ = imp_->ds2_ = imp_->ds3_ = 1.0;
+
 		imp_->state_ = Imp::SingularState::NORMAL;
 	}
 	auto SingularProcessor::setDs(double ds)->void {
-		imp_->current_ds_ = ds;
+		imp_->ds3_ = imp_->ds2_ = imp_->ds1_ = ds;
 	}
 	auto SingularProcessor::currentDs() -> double {
-		return imp_->current_ds_;
+		return imp_->ds3_;
 	}
 	auto SingularProcessor::setTargetDs(double ds)->void {
 		imp_->target_ds_ = ds;
@@ -390,13 +911,9 @@ namespace aris::plan {
 			return max_ratio;
 		};
 
-
 		// move tg step //
 		// max_vel_ratio 和 max_acc_ratio 会触发正常降速
 		auto move_tg_step = [this, get_max_ratio]()->std::int64_t {
-			double zero_check = 1e-10;
-			auto dt = imp_->tg_->dt();
-
 			// 当前处于非奇异状态，正常求反解 //
 			auto ret = imp_->tg_->getEePosAndMoveDt(imp_->output_pos_);
 			if (imp_->inv_func_) {
@@ -408,239 +925,47 @@ namespace aris::plan {
 				if (auto ret = imp_->model_->inverseKinematics(); ret)
 					return ret;
 			}
+			
+			// update ds //
+			imp_->ds1_ = imp_->ds2_;
+			imp_->ds2_ = imp_->ds3_;
+			imp_->ds3_ = imp_->tg_->currentDs();
 
-			///////////////////////////// PART 1 计算 d3s 的可选范围 ///////////////////////////////// 
-			// 
-			// 应有以下等式：
-			// dp_min  < dp  < dp_max
-			// d2p_min < d2p < d2p_max
- 			// d3p_min < d3p < d3p_max
-			//
-			// dp  = dp_ds * ds
-			// d2p = d2p_ds2 * ds^2 + dp_ds * d2s
-			// d3p = d3p_ds2 * ds^3 + 2 * d2p_ds * ds * d2s + d2p_ds * ds * d2s + dp_ds * d3s
-			//     = d3p_ds2 * ds^3 + 3 * d2p_ds * ds * d2s + dp_ds * d3s
-			//
-			// 带入上述不等式，应有：
-			//                                     dp_min/dp_ds < ds  < dp_max/dp_ds
-			//                   (d2p_max-d2p_ds2 * ds^2)/dp_ds < d2s < (d2p_max-d2p_ds2 * ds^2)/dp_ds
-			//  (d3p_min-d3p_ds2 * ds^3 - 3 * d2p_ds * ds * d2s)< d3s < (d3p_max-d3p_ds2 * ds^3 - 3 * d2p_ds * ds * d2s)/dp_ds
-			//
-			// 若 dp_ds < 0，则上式左右相反。
-			//
-			// 上式仅考虑了电机端的输入，没有考虑加速度将为 0 也需要时间。此时：
-			//
-			//       dp_min  <  dp + d2p * T + 0.5 * d3p * T^2  <  dp_max
-			//                                  
-			// 中间式子在 T = -d2p/d3p 时取到极值，大小为：
-			//    
-			//       dp - 0.5*d2p*d2p/d3p
-			//
-			// 若 d2p < 0，则应有 d3p > 0：
-			//       dp_min < dp - 0.5*d2p*d2p/d3p
-			// =>    d2p*d2p/d3p < 2*(dp-dp_min)
-			// =>    d3p > d2p*d2p/(2(dp-dp_min))
-			// 		
-			// 否则应有 d3p < 0：
-			//
-			//       d3p < d2p*d2p/(2(dp_max-dp))
-			//
-			// 考虑加速度不超限，应有：
-			// 
-			//                    d2p_min < d2p + d3p*dt < d2p_max
-			// =>     (d2p_min - d2p)/dt  <      d3p     <  (d2p_max - d2p)/dt
-			//  
-			///////////////////////////// PART 2 计算其中的数据 ///////////////////////////////// 
-			// t0        t1         t2         t3
-			//
-			// p0        p1         p2         p3
-			//     dp1        dp2        dp3
-			//          d2p2       d2p3
-			//               d3p3
-			//  
-			// s0        s1         s2         s3
-			//     ds1        ds2        ds3
-			//          d2s2       d2s3
-			//               d3s3
-			//
-			//         ds(t1)    ds(t2)
-			//        d2s(t1)    d2s(t2)
-			//
-			//
-			//at point t1.5:
-			//
-			//dp(t1.5)  = dp_ds(t1) * ds(t1)
-			//d2p(t1.5) = d2p_ds2(t1) * ds(t1)^2 + dp_ds(t1) * d2s(t1)
-			//          = d2p_ds2(t1) * ds(t1)^2 + (dp1+dp2)/2 / ((ds1+ds2)/2)
-			//
-			// 令 f(t) = d3p_ds2 * ds^3 + 3 * d2p_ds * ds * d2s，则：
-			// 
-			// d3p(t1.5) = f(t1.5) + dp_ds(t1.5) * d3s(t1.5)
-			//           = f(t1.5) + dp(t1.5) / ds(t1) * d2s(t1.5)
-			//
-			// 
+			// update input pos //
+			std::swap(imp_->p0_, imp_->p1_);
+			std::swap(imp_->p1_, imp_->p2_);
+			std::swap(imp_->p2_, imp_->p3_);
+			imp_->model_->getInputPos(imp_->p3_);
 
-			auto last_ds = imp_->current_ds_;
+			SmoothParam param{
+				imp_->tg_->dt(),
+				imp_->input_size_,
+				imp_->min_vels_, imp_->max_vels_, imp_->min_accs_, imp_->max_accs_, imp_->min_jerks_, imp_->max_jerks_,
+				imp_->ds1_, imp_->ds2_, imp_->ds3_,
+				imp_->p0_, imp_->p1_, imp_->p2_, imp_->p3_,
+				imp_->target_ds_
+			};
+			SmoothRet smooth_ret;
+			s_smooth_curve(param, smooth_ret);
 
-			// 取出位置
+			imp_->tg_->setCurrentDs(smooth_ret.next_ds);
+			imp_->tg_->setCurrentDds(0.0);
+			imp_->tg_->setTargetDs(smooth_ret.next_ds);
+
+			// 保存位置 //
 			std::swap(imp_->input_pos_this_, imp_->input_pos_last_);
-			std::swap(imp_->input_vel_this_, imp_->input_vel_last_);
-			imp_->model_->getInputPos(imp_->input_pos_this_);
+			aris::dynamic::s_vc(imp_->input_size_, imp_->p3_, imp_->input_pos_this_);
 
-			// 计算速度
+			// 保存速度 //
+			std::swap(imp_->input_vel_this_, imp_->input_vel_last_);
 			aris::dynamic::s_vc(imp_->input_size_, imp_->input_pos_this_, imp_->input_vel_this_);
 			aris::dynamic::s_vs(imp_->input_size_, imp_->input_pos_last_, imp_->input_vel_this_);
-			aris::dynamic::s_nv(imp_->input_size_, 1.0 / dt, imp_->input_vel_this_);
+			aris::dynamic::s_nv(imp_->input_size_, 1.0 / imp_->tg_->dt(), imp_->input_vel_this_);
 
-			// 计算加速度
+			// 保存加速度 //
 			aris::dynamic::s_vc(imp_->input_size_, imp_->input_vel_this_, imp_->input_acc_this_);
 			aris::dynamic::s_vs(imp_->input_size_, imp_->input_vel_last_, imp_->input_acc_this_);
-			aris::dynamic::s_nv(imp_->input_size_, 1.0 / dt, imp_->input_acc_this_);
-
-			//t0       t1         t2
-			//
-			//p0       p1         p2
-			//   dp1        dp2
-			//        d2p2
-			//
-			//         s1         s2
-			//   ds1        ds2
-			//        d2s2
-			//
-			//         ds(t1)    ds(t2)
-			//        d2s(t1)    d2s(t2)
-			//
-			//
-			//at point 1:
-			//
-			//dp(t1)  = dp_ds(t1) * ds(t1)
-			//d2p(t1) = d2p_ds2(t1) * ds(t1)^2 + dp_ds(t1) * d2s(t1)
-			//        = d2p_ds2(t1) * ds(t1)^2 + (dp1+dp2)/2 / ((ds1+ds2)/2)
-
-			// 计算去除 dds 项所影响的加速度，因此以下为 ds 不变时，速度和加速度的比例
-			// dp  = dp_ds * ds
-			// d2p = d2p_ds2 * ds^2 + dp_ds * d2s
-			//     = d2p_ds2 * ds^2 + dp * d2s / ds
-			// =>
-			// d2p_ds2 * ds^2 = d2p - dp * d2s / ds
-			double ds_real = ((last_ds - imp_->last_dds * dt) + last_ds) / 2;
-			aris::dynamic::s_vc(imp_->input_size_, imp_->input_acc_this_, imp_->input_acc_ratio_);
-			aris::dynamic::s_va(imp_->input_size_, -0.5 * imp_->last_dds / ds_real, imp_->input_vel_this_, imp_->input_acc_ratio_);
-			aris::dynamic::s_va(imp_->input_size_, -0.5 * imp_->last_dds / ds_real, imp_->input_vel_last_, imp_->input_acc_ratio_);
-
-			// 正常情况下，可能需改变规划器中ds //
-			auto vel_ratio = get_max_ratio(imp_->input_size_, imp_->max_vels_, imp_->input_vel_this_) / imp_->max_vel_ratio_;
-			auto acc_ratio = std::sqrt(get_max_ratio(imp_->input_size_, imp_->max_accs_, imp_->input_acc_ratio_) / imp_->max_acc_ratio_);
-
-			// 判断是否要改 ds_ratio，用以判断是否需要减速 //
-			auto ds_ratio = std::max({
-				vel_ratio ,
-				acc_ratio
-				});
-
-			// 需要根据当前的速度情况，计算max_dds min_dds  //
-			//
-			// d2p_min < d2p < d2p_max
-			// =>
-			// d2p_min < d2p_ds2 * ds ^ 2 + dp / ds * d2s < d2p_max
-			// =>
-			// d2p_min - d2p_ds2 * ds ^ 2 < dp / ds * d2s < d2p_max - d2p_ds2 * ds ^ 2 
-			// 
-			// 其中 d2p_ds2 * ds ^ 2 在上文中计算过
-			//
-			// 因此若 dp < 0
-			// [d2p_max - (d2p_ds2 * ds^2)]*ds/dp  < d2s < [d2p_min - (d2p_ds2 * ds^2)]*ds/dp
-			// 否则
-			// [d2p_min - (d2p_ds2 * ds^2)]*ds/dp  < d2s < [d2p_max - (d2p_ds2 * ds^2)]*ds/dp
-			// 
-			for (int i = 0; i < imp_->input_size_; ++i) {
-				if (std::abs(imp_->input_vel_this_[i]) < zero_check) {
-					imp_->input_acc_max_consider_ratio_[i] = 1e10;
-					imp_->input_acc_min_consider_ratio_[i] = -1e10;
-				}
-				else {
-					imp_->input_acc_max_consider_ratio_[i] = (0.99*imp_->max_accs_[i] - imp_->input_acc_ratio_[i]) * last_ds / imp_->input_vel_this_[i];
-					imp_->input_acc_min_consider_ratio_[i] = (-0.99*imp_->max_accs_[i] - imp_->input_acc_ratio_[i]) * last_ds / imp_->input_vel_this_[i];
-					if (imp_->input_vel_this_[i] < 0)
-						std::swap(imp_->input_acc_max_consider_ratio_[i], imp_->input_acc_min_consider_ratio_[i]);
-				}
-			}
-			double max_dds = *std::min_element(imp_->input_acc_max_consider_ratio_, imp_->input_acc_max_consider_ratio_ + imp_->input_size_);
-			double min_dds = *std::max_element(imp_->input_acc_min_consider_ratio_, imp_->input_acc_min_consider_ratio_ + imp_->input_size_);
-
-			// 确保 max_dds > min_dds
-			double mid = (max_dds + min_dds) / 2;
-			max_dds = std::max(mid, max_dds);
-			min_dds = std::min(mid, min_dds);
-
-			// 进行调速 //
-			double target_ds = std::min(imp_->target_ds_, (vel_ratio > acc_ratio ? last_ds : ds_real) / ds_ratio); // 注意，这里的速度/加速度降速的比较基准不一样
-			target_ds = std::max(0.01, target_ds);
-			target_ds = std::min(1.0, target_ds);
-			if (target_ds - last_ds > dt * max_dds) {
-					imp_->current_ds_ = last_ds + dt * max_dds;
-				}
-			else if (target_ds - last_ds < dt * min_dds) {
-					imp_->current_ds_ = last_ds + dt * min_dds;
-				}
-			else {
-				imp_->current_ds_ = target_ds;
-			}
-
-			//if (target_ds < 1.0) {
-			//	std::cout << "dec : " << target_ds << std::endl;
-			//}
-
-
-			imp_->current_ds_ = std::max(0.01, imp_->current_ds_);
-			imp_->current_ds_ = std::min(1.0, imp_->current_ds_);
-			
-			imp_->tg_->setCurrentDs(imp_->current_ds_);
-			imp_->tg_->setCurrentDds(0.0);
-			imp_->tg_->setTargetDs(imp_->current_ds_);
-			imp_->last_dds = (imp_->current_ds_ - last_ds) / dt;
-
-#ifdef ARIS_DEBUG_SINGULAR_PROCESSOR
-			static int print_count = 0;
-
-			if (print_count++ > 200 && print_count < 220)
-			{
-				std::cout << print_count << ": ds:" << last_ds << "  ds_ratio" << ds_ratio
-					<< "  vel_ratio" << vel_ratio << "  acc_ratio" << acc_ratio << "  dds:" << imp_->last_dds << std::endl;
-				
-				
-
-				for (int i = 0; i < imp_->input_size_; ++i) {
-					std::cout << std::abs(imp_->input_acc_ratio_[i]/ imp_->max_accs_[i]) << "  ";
-				}
-				std::cout << std::endl;
-				for (int i = 0; i < imp_->input_size_; ++i) {
-					std::cout << std::sqrt(std::abs(imp_->input_acc_ratio_[i] / imp_->max_accs_[i])) << "  ";
-				}
-				std::cout << std::endl;
-				for (int i = 0; i < imp_->input_size_; ++i) {
-					std::cout << std::sqrt(std::abs(imp_->input_acc_ratio_[i] / imp_->max_accs_[i]) / imp_->max_acc_ratio_) << "  ";
-				}
-				std::cout << std::endl;
-				for (int i = 0; i < imp_->input_size_; ++i) {
-					std::cout << ds_real / std::sqrt(std::abs(imp_->input_acc_ratio_[i] / imp_->max_accs_[i]) / imp_->max_acc_ratio_) << "  ";
-				}
-				std::cout << std::endl;
-
-				aris::dynamic::dsp(1, imp_->input_size_, imp_->input_acc_ratio_);
-				aris::dynamic::s_nv(imp_->input_size_, 1.0 / ds_real / ds_real, imp_->input_acc_ratio_);
-				aris::dynamic::dsp(1, imp_->input_size_, imp_->input_acc_ratio_);
-
-				for (int i = 0; i < imp_->input_size_; ++i) {
-					std::cout << 1.0/std::sqrt(std::abs(imp_->input_acc_ratio_[i] / imp_->max_accs_[i]) / imp_->max_acc_ratio_) << "  ";
-				}
-				std::cout << std::endl;
-
-				std::cout << "------------------" << std::endl;
-			}
-			//if (ds_ratio > 1.0)
-
-#endif
+			aris::dynamic::s_nv(imp_->input_size_, 1.0 / imp_->tg_->dt(), imp_->input_acc_this_);
 
 			return ret;
 		};
@@ -820,7 +1145,6 @@ namespace aris::plan {
 			return move_in_singular();
 		};
 
-
 		if (imp_->state_ == Imp::SingularState::SINGULAR) {
 			// 当前已经处于奇异状态 //
 			return move_in_singular();
@@ -829,7 +1153,6 @@ namespace aris::plan {
 #ifdef ARIS_DEBUG_SINGULAR_PROCESSOR
 			std::cout << "singular prepare" << std::endl;
 #endif
-
 			// 这一次的开始是真正开始的值 //
 			aris::dynamic::s_vc(imp_->input_size_, imp_->input_pos_this_, imp_->input_pos_begin_);
 			aris::dynamic::s_vc(imp_->input_size_, imp_->input_vel_this_, imp_->input_vel_begin_);

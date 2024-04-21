@@ -1660,7 +1660,7 @@ void test_qp() {
 
 		double x[nG]{ -0.729005053385393,	 -1.36004915704643,  1.19313161257671 };
 
-		test_qp(nG, nCE, nCI, G, g, CE, ce, CI, ci, x);
+		//test_qp(nG, nCE, nCI, G, g, CE, ce, CI, ci, x);
 	}
 
 

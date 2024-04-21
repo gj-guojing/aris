@@ -20,6 +20,10 @@
 /// 
 /// 
 namespace aris::plan{
+
+	auto ARIS_API s_is_in_vavg_boundage(const double* v0, const double* v1, const double* v_avg, double a, double dt, double* dis = nullptr, double* r = nullptr, double zero_check = 1e-10) -> bool;
+
+
 	class ARIS_API MoveFollower {
 	public:
 		// 设置时间间隔 dt //
