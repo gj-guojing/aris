@@ -409,8 +409,8 @@ namespace aris::plan {
 		const double MIN_D3S = -10000.0;
 
 		const double VEL_BOUND_RATIO = 0.99;
-		const double ACC_BOUND_RATIO = 0.9;
-		const double JERK_BOUND_RATIO = 0.999;
+		const double ACC_BOUND_RATIO = 0.95;
+		const double JERK_BOUND_RATIO = 0.95;
 		
 
 		double dt = param.dt;
@@ -750,14 +750,11 @@ namespace aris::plan {
 		aris::Size total_singular_count_{ 0 }, current_singular_count_{ 0 };
 		CurveParam* curve_params_;
 
+		double max_vel_ratio_{ 0.99 };
+		double max_acc_ratio_{ 0.95 };
+		double max_jerk_ratio_{ 0.95 };
 
-
-		double T;
-		double check_rate_{ 0.99 };
-		double max_vel_ratio_{ 0.95 };
-		double max_acc_ratio_{ 0.9 };
 		double target_ds_{ 1.0 };
-
 		double ds1_{ 1.0 }, ds2_{ 1.0 }, ds3_{ 1.0 };
 		
 		aris::dynamic::ModelBase* model_{ nullptr };
@@ -1014,7 +1011,7 @@ namespace aris::plan {
 
 
 			// 尝试迭代到下一个非奇异的时刻，最多迭代 10 次 //
-			const int MAX_ITER_COUNT = 2;
+			const int MAX_ITER_COUNT = 10;
 
 			int idx;
 			int while_count{ 0 };
@@ -1035,8 +1032,8 @@ namespace aris::plan {
 
 					// 考虑结束条件可能是循环次数到了，因此将终止速度保护
 					for (int i = 0; i < imp_->input_size_; ++i) {
-						imp_->input_vel_end_[i] = std::max(-imp_->max_vels_[i], imp_->input_vel_end_[i]);
-						imp_->input_vel_end_[i] = std::min(imp_->max_vels_[i], imp_->input_vel_end_[i]);
+						imp_->input_vel_end_[i] = std::max(-imp_->max_vels_[i] * imp_->max_vel_ratio_, imp_->input_vel_end_[i]);
+						imp_->input_vel_end_[i] = std::min(imp_->max_vels_[i] * imp_->max_vel_ratio_, imp_->input_vel_end_[i]);
 					}
 
 					// 计算每根轴所需要的时间 //
