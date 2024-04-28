@@ -6,6 +6,7 @@
 
 #include <string>
 #include <map>
+#include <cmath>
 #include <aris/core/core.hpp>
 
 namespace aris::plan
