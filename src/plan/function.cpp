@@ -5,6 +5,7 @@
 #include <aris/dynamic/dynamic.hpp>
 
 #include <sstream>
+#include <cmath>
 
 namespace aris::plan
 {
