@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <new>
 #include <future>
+#include <list>
 
 #include "aris/core/reflection.hpp"
 

@@ -544,6 +544,8 @@ namespace aris::plan {
 
 		double next_ds, next_d2s, next_d3s{ 0.0 };
 
+		double d3s_max, d3s_min;
+
 		// 0. ds 过小、无法通过ds 判断出原始轨迹的曲率等
 		if (ds3 <= zero_check || ds2 < zero_check || ds1 < zero_check) {
 			aris::Size total_count;
@@ -558,8 +560,8 @@ namespace aris::plan {
 		}
 
 		// 2. 可以在COND 1234不超限的情况下，完成规划
-		auto d3s_max = d3s_max_all;
-		auto d3s_min = d3s_min_all;
+		d3s_max = d3s_max_all;
+		d3s_min = d3s_min_all;
 		if (d3s_max > d3s_min) {
 			bool is_avalable = false;
 			if (ds3 > 0.5) {
