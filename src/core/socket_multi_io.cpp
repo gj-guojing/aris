@@ -720,6 +720,7 @@ namespace aris::core{
 				}
 				}
 			//}
+			return 0;
 		}
 	};
 	auto SocketMultiIo::Imp::acceptThread(SocketMultiIo::Imp* imp, std::promise<void> accept_thread_ready)->void{
@@ -998,7 +999,8 @@ namespace aris::core{
 		// 通知accept或connect线程已经准备好,下一步开始收发数据 //
 		receive_thread_ready.set_value();
 
-		imp->recv_from_sock(imp->recv_socket_, SocketRecvData{});
+		SocketRecvData data;
+		imp->recv_from_sock(imp->recv_socket_, data);
 	}
 	auto SocketMultiIo::stop()->void{
 		std::lock(imp_->state_mutex_, imp_->close_mutex_);
