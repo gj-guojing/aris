@@ -1371,7 +1371,7 @@ namespace aris::core{
 	};
 	
 	auto SocketMultiIo::port()const->const std::string&{
-		std::unique_lock<std::recursive_mutex> lck(imp_->state_mutex_);
+		//std::unique_lock<std::recursive_mutex> lck(imp_->state_mutex_);
 		return imp_->port_;
 	}
 	auto SocketMultiIo::setPort(const std::string &port)->void{
@@ -1379,7 +1379,7 @@ namespace aris::core{
 		imp_->port_ = port;
 	}
 	auto SocketMultiIo::remoteIP()const->const std::string &{
-		std::unique_lock<std::recursive_mutex> lck(imp_->state_mutex_);
+		//std::unique_lock<std::recursive_mutex> lck(imp_->state_mutex_);
 		return imp_->remote_ip_;
 	}
 	auto SocketMultiIo::setRemoteIP(const std::string &remote_ip)->void{

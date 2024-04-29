@@ -819,6 +819,31 @@ namespace aris::core{
 		// 建立 socket 描述符 //
 		if ((imp_->recv_socket_ = socket(AF_INET, sock_type, 0)) < 0)THROW_FILE_LINE("Socket can't connect, because can't socket\n");
 
+#ifdef UNIX
+		// Set the option active //
+		int keepAlive = 1; // 开启keepalive属性
+		int keepIdle = 5; // 如该连接在5秒内没有任何数据往来,则进行探测 
+		int keepInterval = 1; // 探测时发包的时间间隔为5 秒
+		int keepCount = 5; // 探测尝试的次数.如果第1次探测包就收到响应了,则后2次的不再发.
+
+		if (setsockopt(imp_->lisn_socket_, SOL_SOCKET, SO_KEEPALIVE, (void*)&keepAlive, sizeof(keepAlive)) < 0) {
+			close_sock(imp_->lisn_socket_);
+			THROW_FILE_LINE("socket setsockopt SO_KEEPALIVE FAILED");
+		}
+		if (setsockopt(imp_->lisn_socket_, IPPROTO_TCP, TCP_KEEPIDLE, (void*)&keepIdle, sizeof(keepIdle)) < 0) {
+			close_sock(imp_->lisn_socket_);
+			THROW_FILE_LINE("socket setsockopt TCP_KEEPIDLE FAILED");
+		}
+		if (setsockopt(imp_->lisn_socket_, IPPROTO_TCP, TCP_KEEPINTVL, (void*)&keepInterval, sizeof(keepInterval)) < 0) {
+			close_sock(imp_->lisn_socket_);
+			THROW_FILE_LINE("socket setsockopt TCP_KEEPINTVL FAILED");
+		}
+		if (setsockopt(imp_->lisn_socket_, IPPROTO_TCP, TCP_KEEPCNT, (void*)&keepCount, sizeof(keepCount)) < 0) {
+			close_sock(imp_->lisn_socket_);
+			THROW_FILE_LINE("socket setsockopt TCP_KEEPCNT FAILED");
+		}
+#endif
+
 		// 设置 time_out //
 		if (imp_->connect_time_out_ >= 0) {
 #ifdef WIN32
@@ -1074,7 +1099,7 @@ namespace aris::core{
 	};
 	
 	auto Socket::port()const->const std::string&{
-		std::unique_lock<std::recursive_mutex> lck(imp_->state_mutex_);
+		//std::unique_lock<std::recursive_mutex> lck(imp_->state_mutex_);
 		return imp_->port_;
 	}
 	auto Socket::setPort(const std::string &port)->void{
@@ -1082,7 +1107,7 @@ namespace aris::core{
 		imp_->port_ = port;
 	}
 	auto Socket::remoteIP()const->const std::string &{
-		std::unique_lock<std::recursive_mutex> lck(imp_->state_mutex_);
+		//std::unique_lock<std::recursive_mutex> lck(imp_->state_mutex_);
 		return imp_->remote_ip_;
 	}
 	auto Socket::setRemoteIP(const std::string &remote_ip)->void{
