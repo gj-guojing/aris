@@ -826,20 +826,20 @@ namespace aris::core{
 		int keepInterval = 1; // 探测时发包的时间间隔为5 秒
 		int keepCount = 5; // 探测尝试的次数.如果第1次探测包就收到响应了,则后2次的不再发.
 
-		if (setsockopt(imp_->lisn_socket_, SOL_SOCKET, SO_KEEPALIVE, (void*)&keepAlive, sizeof(keepAlive)) < 0) {
-			close_sock(imp_->lisn_socket_);
+		if (setsockopt(imp_->recv_socket_, SOL_SOCKET, SO_KEEPALIVE, (void*)&keepAlive, sizeof(keepAlive)) < 0) {
+			close_sock(imp_->recv_socket_);
 			THROW_FILE_LINE("socket setsockopt SO_KEEPALIVE FAILED");
 		}
-		if (setsockopt(imp_->lisn_socket_, IPPROTO_TCP, TCP_KEEPIDLE, (void*)&keepIdle, sizeof(keepIdle)) < 0) {
-			close_sock(imp_->lisn_socket_);
+		if (setsockopt(imp_->recv_socket_, IPPROTO_TCP, TCP_KEEPIDLE, (void*)&keepIdle, sizeof(keepIdle)) < 0) {
+			close_sock(imp_->recv_socket_);
 			THROW_FILE_LINE("socket setsockopt TCP_KEEPIDLE FAILED");
 		}
-		if (setsockopt(imp_->lisn_socket_, IPPROTO_TCP, TCP_KEEPINTVL, (void*)&keepInterval, sizeof(keepInterval)) < 0) {
-			close_sock(imp_->lisn_socket_);
+		if (setsockopt(imp_->recv_socket_, IPPROTO_TCP, TCP_KEEPINTVL, (void*)&keepInterval, sizeof(keepInterval)) < 0) {
+			close_sock(imp_->recv_socket_);
 			THROW_FILE_LINE("socket setsockopt TCP_KEEPINTVL FAILED");
 		}
-		if (setsockopt(imp_->lisn_socket_, IPPROTO_TCP, TCP_KEEPCNT, (void*)&keepCount, sizeof(keepCount)) < 0) {
-			close_sock(imp_->lisn_socket_);
+		if (setsockopt(imp_->recv_socket_, IPPROTO_TCP, TCP_KEEPCNT, (void*)&keepCount, sizeof(keepCount)) < 0) {
+			close_sock(imp_->recv_socket_);
 			THROW_FILE_LINE("socket setsockopt TCP_KEEPCNT FAILED");
 		}
 #endif
