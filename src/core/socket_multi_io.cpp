@@ -255,13 +255,14 @@ namespace aris::core{
 
 
 	struct SocketMultiIo::Imp{
-		
-
 		SocketMultiIo* socket_;
 		SocketMultiIo::State state_{ State::IDLE };
 		SocketMultiIo::Type type_{ Type::TCP };
 		bool is_server_{false};
 		std::int64_t connect_time_out_{ -1 };
+
+		std::map<SOCKET_T, SocketRecvData> recv_data_;
+		std::list<SOCKET_T> recv_sockets_;
 
 		std::function<int(SocketMultiIo *, aris::core::Msg &)> onReceivedMsg;
 		std::function<int(SocketMultiIo *, const char *data, int size)> onReceivedData;
@@ -527,12 +528,12 @@ namespace aris::core{
 				switch (type_) {
 				case SocketMultiIo::Type::TCP: {
 					if (safe_recv2(recv_sock, recv_data) <= 0) { 
-						lose_tcp(); 
+						lose_tcp2(recv_sock);
 						return -1;
 					}
 					if (recv_data.received_length_ >= sizeof(MsgHeader)) {
 						auto msg_size = reinterpret_cast<MsgHeader*>(recv_data.str_.data())->msg_size_;
-						if (msg_size > 0x00100000 || msg_size < 0) { lose_tcp(); return -1; }
+						if (msg_size > 0x00100000 || msg_size < 0) { lose_tcp2(recv_sock); return -1; }
 						recv_data.required_length_ = msg_size + sizeof(MsgHeader);
 					}
 					if (recv_data.received_length_ == recv_data.required_length_ && onReceivedMsg) {
@@ -734,19 +735,19 @@ namespace aris::core{
 		accept_thread_ready.set_value();
 
 		
-		std::map<SOCKET_T, SocketRecvData> recv_data;
-
 		auto nfds = imp->lisn_socket_ + 1;
-		std::list<SOCKET_T> recv_sockets;
+		
+		imp->recv_data_.clear();
+		imp->recv_sockets_.clear();
 
 		::fd_set f_s;
 		for (;;) {
 			FD_ZERO(&f_s);
 			FD_SET(imp->lisn_socket_, &f_s);
-			for (auto& fd : recv_sockets) {
+			for (auto& fd : imp->recv_sockets_) {
 				FD_SET(fd, &f_s);
 			}
-			nfds = recv_sockets.size() > 0 ? std::max(*std::max_element(recv_sockets.begin(), recv_sockets.end()), imp->lisn_socket_) : imp->lisn_socket_+1;
+			nfds = imp->recv_sockets_.size() > 0 ? std::max(*std::max_element(imp->recv_sockets_.begin(), imp->recv_sockets_.end()), imp->lisn_socket_) : imp->lisn_socket_+1;
 
 			auto select_ret = ::select(nfds, &f_s, nullptr, nullptr, nullptr);
 
@@ -765,15 +766,14 @@ namespace aris::core{
 							return;
 						}
 						else {
-							std::cout << "some error happned when socket accept" << std::endl;
 							std::this_thread::sleep_for(std::chrono::seconds(1));
 							continue;
 						}
 
 					}
 
-					recv_sockets.push_back(recv_sock);
-					recv_data.insert(std::pair<SOCKET_T, SocketRecvData>(recv_sock, SocketRecvData()));
+					imp->recv_sockets_.push_back(recv_sock);
+					imp->recv_data_.insert(std::pair<SOCKET_T, SocketRecvData>(recv_sock, SocketRecvData()));
 					
 
 					if (imp->type_ == Type::WEB || imp->type_ == Type::WEB_RAW) {
@@ -857,118 +857,21 @@ namespace aris::core{
 					imp->state_ = SocketMultiIo::State::WORKING;
 				}
 
-				for (auto recv_iter = recv_sockets.begin(); recv_iter != recv_sockets.end();) {
+				for (auto recv_iter = imp->recv_sockets_.begin(); recv_iter != imp->recv_sockets_.end();) {
 					if (FD_ISSET(*recv_iter, &f_s)) {
-						if (imp->recv_from_sock2(*recv_iter, recv_data[*recv_iter]) < 0) {
-							recv_iter = recv_sockets.erase(recv_iter);
+						if (imp->recv_from_sock2(*recv_iter, imp->recv_data_[*recv_iter]) < 0) {
+							//std::cout << "sock closed : " << *recv_iter << std::endl;
+							recv_iter = imp->recv_sockets_.erase(recv_iter);
 							continue;
 						}
 					}
 
 					recv_iter++;
 				}
-
-				std::cout << "select finished" << std::endl;
 			}
 
 		}
 		
-
-
-		// 开始建立连接 //
-		for (;;){
-			// 服务器阻塞,直到客户程序建立连接 //
-			imp->recv_socket_ = accept(imp->lisn_socket_, (struct sockaddr *)(&imp->client_addr_), &imp->sin_size_);
-			
-			if (imp->recv_socket_ == -1){
-				ARIS_LOG(SOCKET_FAILED_ACCEPT, (int)imp->recv_socket_);
-				
-				std::unique_lock<std::recursive_mutex> close_lck(imp->close_mutex_, std::defer_lock);
-				if (!close_lck.try_lock()){
-					close_sock2(imp->lisn_socket_);
-					imp->state_ = State::IDLE;
-					imp->accept_thread_.detach();
-					return;
-				}
-				else {
-					std::cout << "some error happned when socket accept" << std::endl;
-					std::this_thread::sleep_for(std::chrono::seconds(1));
-					continue;
-				}
-				
-			}
-
-			if (imp->type_ == Type::WEB || imp->type_ == Type::WEB_RAW){
-				std::this_thread::sleep_for(std::chrono::seconds(3));
-				
-				char recv_data[1024]{ 0 };
-				int res = recv(imp->recv_socket_, recv_data, 1024, 0);
-				if (res <= 0){
-					ARIS_LOG(WEBSOCKET_SHAKE_HAND_FAILED, res);
-					shutdown(imp->recv_socket_, 2);
-					close_sock2(imp->recv_socket_);
-					continue;
-				}
-
-				auto header_map = make_header_map2(recv_data);
-				std::string server_key;
-				try{
-					server_key = header_map.at("Sec-WebSocket-Key");
-				}
-				catch (std::exception &){
-					ARIS_LOG(WEBSOCKET_SHAKE_HAND_FAILED_INVALID_KEY);
-					shutdown(imp->recv_socket_, 2);
-					close_sock2(imp->recv_socket_);
-					continue;
-				}
-				server_key += "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-
-				// 找到返回的key //
-				SHA1 checksum;
-				checksum.update(server_key);
-				std::string hash = checksum.final();
-
-				std::uint32_t message_digest[5]{};
-				for (Size i = 0; i < 20; ++i){
-					char num[5] = "0x00";
-					std::copy_n(hash.data() + i * 2, 2, num + 2);
-					std::uint8_t n = std::stoi(num, 0, 16);
-					*(reinterpret_cast<unsigned char*>(message_digest) + i) = n;
-				}
-
-				auto ret_hey = base64_encode2_2(reinterpret_cast<const unsigned char*>(message_digest), 20);
-
-				std::string shake_hand;
-				shake_hand = "HTTP/1.1 101 Switching Protocols\r\n"
-					"Upgrade: websocket\r\n"
-					"Connection: Upgrade\r\n"
-					"Sec-WebSocket-Accept: " + ret_hey + std::string("\r\n\r\n");
-
-				auto ret = send(imp->recv_socket_, shake_hand.c_str(), static_cast<int>(shake_hand.size()), 0);
-				
-				if (ret == -1){
-					ARIS_LOG(WEBSOCKET_SHAKE_HAND_FAILED_LOOSE_CONNECTION);
-					shutdown(imp->recv_socket_, 2);
-					close_sock2(imp->recv_socket_);
-					continue;
-				};
-			}
-
-			break;
-		}
-		
-		shutdown(imp->lisn_socket_, 2);
-		close_sock2(imp->lisn_socket_);
-
-		// 否则,开始开启数据线程 //
-		if (imp->onReceivedConnection)imp->onReceivedConnection(imp->socket_, inet_ntoa(imp->client_addr_.sin_addr), ntohs(imp->client_addr_.sin_port));
-
-		std::promise<void> receive_thread_ready;
-		auto fut = receive_thread_ready.get_future();
-		imp->recv_thread_ = std::thread(receiveThread, imp, std::move(receive_thread_ready));
-		fut.wait();
-
-		imp->accept_thread_.detach();
 		return;
 	}
 	auto SocketMultiIo::Imp::receiveThread(SocketMultiIo::Imp* imp, std::promise<void> receive_thread_ready)->void{
@@ -1011,26 +914,29 @@ namespace aris::core{
 		case State::IDLE:
 			break;
 		case State::WAITING_FOR_CONNECTION:
+		case State::WORKING:
 			shutdown(imp_->lisn_socket_, 2);
 			close_sock2(imp_->lisn_socket_);
-			while (imp_->accept_thread_.joinable())
-				std::this_thread::sleep_for(std::chrono::milliseconds(1));
-			break;
-		case State::WORKING:
-			switch (connectType()){
-			case Type::TCP:
-			case Type::TCP_RAW:
-			case Type::WEB:
-			case Type::WEB_RAW:
-				if (shutdown(imp_->recv_socket_, 2) < 0) ARIS_LOG(SOCKET_SHUT_DOWN_ERROR, errno);
-				break;
-			case Type::UDP:
-			case Type::UDP_RAW:
-				if (close_sock2(imp_->recv_socket_) < 0) ARIS_LOG(SOCKET_SHUT_CLOSE_ERROR, errno);
-				break;
+
+			for (auto& recv_sock : imp_->recv_sockets_) {
+				switch (connectType()) {
+				case Type::TCP:
+				case Type::TCP_RAW:
+				case Type::WEB:
+				case Type::WEB_RAW:
+					if (shutdown(recv_sock, 2) < 0)
+						ARIS_LOG(SOCKET_SHUT_DOWN_ERROR, errno);
+					break;
+				case Type::UDP:
+				case Type::UDP_RAW:
+					if (close_sock2(recv_sock) < 0) 
+						ARIS_LOG(SOCKET_SHUT_CLOSE_ERROR, errno);
+					break;
+				}
 			}
 
-			if(imp_->recv_thread_.joinable())imp_->recv_thread_.join();
+			while (imp_->accept_thread_.joinable())
+				std::this_thread::sleep_for(std::chrono::milliseconds(1));
 			break;
 		}
 
