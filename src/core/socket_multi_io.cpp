@@ -766,6 +766,7 @@ namespace aris::core{
 							return;
 						}
 						else {
+							close_sock2(imp->lisn_socket_);
 							std::this_thread::sleep_for(std::chrono::seconds(1));
 							continue;
 						}
@@ -916,7 +917,7 @@ namespace aris::core{
 		case State::WAITING_FOR_CONNECTION:
 		case State::WORKING:
 			shutdown(imp_->lisn_socket_, 2);
-			close_sock2(imp_->lisn_socket_);
+			//close_sock2(imp_->lisn_socket_);
 
 			for (auto& recv_sock : imp_->recv_sockets_) {
 				switch (connectType()) {
