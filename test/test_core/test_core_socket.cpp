@@ -315,6 +315,7 @@ void test_socket_multi_io_clients() {
 				});
 			server.setOnLoseConnection([&](SocketMultiIo*) {
 				lose_executed = true;
+				std::cout << "lose connection" << std::endl;
 				return 0;
 				});
 

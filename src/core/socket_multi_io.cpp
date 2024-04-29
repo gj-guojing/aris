@@ -840,22 +840,27 @@ namespace aris::core{
 #ifdef WIN32
 					u_long block = 0;
 					if (ioctlsocket(recv_sock, FIONBIO, &block) == SOCKET_ERROR) {
-						imp->lose_tcp();
+						imp->lose_tcp2(recv_sock);
 					}
 #endif
 #ifdef UNIX
 					long arg;
 					if ((arg = fcntl(recv_sock, F_GETFL, NULL)) < 0) {
-						imp->lose_tcp();
+						imp->lose_tcp2(recv_sock);
 					}
 					arg &= (~O_NONBLOCK);
 					if (fcntl(recv_sock, F_SETFL, arg) < 0) {
-						imp->lose_tcp();
+						imp->lose_tcp2(recv_sock);
 					}
 #endif
 
 					// 改变状态 //
 					imp->state_ = SocketMultiIo::State::WORKING;
+
+					// CALL BACK //
+					if (imp->onReceivedConnection) {
+						imp->onReceivedConnection(imp->socket_, inet_ntoa(imp->client_addr_.sin_addr), ntohs(imp->client_addr_.sin_port));
+					}
 				}
 
 				for (auto recv_iter = imp->recv_sockets_.begin(); recv_iter != imp->recv_sockets_.end();) {
