@@ -747,7 +747,7 @@ namespace aris::core{
 			for (auto& fd : imp->recv_sockets_) {
 				FD_SET(fd, &f_s);
 			}
-			nfds = imp->recv_sockets_.size() > 0 ? std::max(*std::max_element(imp->recv_sockets_.begin(), imp->recv_sockets_.end()), imp->lisn_socket_) : imp->lisn_socket_+1;
+			nfds = imp->recv_sockets_.size() > 0 ? std::max(*std::max_element(imp->recv_sockets_.begin(), imp->recv_sockets_.end()), imp->lisn_socket_)+1 : imp->lisn_socket_+1;
 
 			auto select_ret = ::select(nfds, &f_s, nullptr, nullptr, nullptr);
 
