@@ -367,6 +367,12 @@ namespace aris::dynamic{
 			s_inv_pq_dot_pq(pq_tool_in_base, pq_tool_in_base + 7 * i, L);
 			s_pq_dot_inv_pq(pq_obj_in_eye, pq_obj_in_eye + 7 * i, R);
 			
+			if (L[6] < 0.0) {
+				s_iv(4, L + 3);
+			}
+			if (R[6] < 0.0) {
+				s_iv(4, R + 3);
+			}
 
 			//////////////////////////////////////////////
 			/*
@@ -419,6 +425,9 @@ namespace aris::dynamic{
 		double V[16];
 		s_svd((n - 1) * 4, 4, mem_need, mem_need + (n - 1) * 4 *4, mem_need, V);
 
+
+		aris::dynamic::dsp((n - 1) * 4, 4, mem_need);
+		aris::dynamic::dsp(4, 4, V);
 
 		// U size : (n - 1) * 4 *(n - 1) * 4 = 16 * (n-1)^2
 		// S size : (n - 1) * 4 * 4 = 16*(n-1)
