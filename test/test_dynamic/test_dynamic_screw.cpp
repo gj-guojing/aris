@@ -73,6 +73,90 @@ void test_pm_operation(){
 	s_inv_pm_dot_v3(inv_pm, from_v1_ld, 2, result, 3);
 	if (!s_is_equal(3, result, to_v1_ld, error))std::cout << "\"s_pm_dot_v3 with ld\" failed" << std::endl;
 }
+void test_pq_operation() {
+	const double pm[16]{ -0.22, -0.975499782797526,   0.000416847668728071, 0.1,
+		0.175499782797526, -0.04, -0.983666521865018, 0.2,
+		0.959583152331272, -0.216333478134982,   0.18, 0.3,
+		0,0,0,1 };
+	const double pm2[16]{ 0.567219713641686,-0.802125918959455,0.186697098503681,0.1,
+		0.77780532845257,0.447242474005492,-0.441580163137156,0.2,
+		0.270704021926224,0.395686971707304,0.877582561890373,0.3,
+		0,0,0,1 };
+	const double pm3[16]{ 0.959630766969045,0.00981685903664117,0.281091480420624,0.11,
+		0.224691174394048,0.574386230075444,-0.787143147622555,0.22,
+		-0.169182349066996,0.818525557315332,0.548992936917952,-0.33,
+		0,0,0,1 };
+	const double pm_dot_pm2[16]{ -0.883424423624956,-0.259652292887403,0.390053809802222,-0.116974902258887,
+		-0.197847760298552,-0.547886650720495,-0.812820079542285,-0.0855499782797527,
+		0.424755872811384,-0.79523638294572,0.432644824020405,0.406691619606131,
+		0,0,0,1, };
+	const double pm_dot_pm2_dot_pm3[16]{ -0.972093055630252,0.16145585737304,0.170197230633687, -0.399992850527594,
+		-0.175451282517831, -0.981954799994014, -0.0705805797055172,0.0403823311778517,
+		0.155730339556197, -0.0984722137897536,0.982879079263088,0.135689969440591,
+		0,0,0,1 };
+	const double inv_pm[16]{ -0.22,0.175499782797526,0.959583152331272, -0.300974902258887,
+		-0.975499782797526, -0.04, -0.216333478134982,0.170450021720247,
+		0.000416847668728071, -0.983666521865018,0.18,0.142691619606131,
+		0,0,0,1 };
+	const double inv_pm2[16]{ 0.567219713641686,0.77780532845257,0.270704021926224,-0.29349424363255,
+		-0.802125918959455,0.447242474005492,0.395686971707304, -0.127941994417344,
+		0.186697098503681, -0.441580163137156,0.877582561890373, -0.193628445790049,
+		0,0,0,1 };
+
+	const double from_v1[]{ 0.45,0.65,0.13 };
+	const double from_v1_ld[]{ 0.45,0,0.65,0,0.13,0 };
+	const double to_v1[]{ -0.733020668621457,-0.0749017455835656,0.314595657761334 };
+	const double to_v1_ld[]{ -0.733020668621457,0,0,-0.0749017455835656,0,0,0.314595657761334,0,0 };
+
+	double result[36];
+
+	double pq[7], pq2[7], pq3[7];
+
+	s_inv_pm(pm, result);
+	if (!s_is_equal(16, result, inv_pm, error))std::cout << "\"s_inv_pm\" failed" << std::endl;
+
+	
+	s_pm2pq(pm, pq);
+	s_inv_pq(pq, result);
+	aris::dynamic::dsp(1, 7, pq);
+	aris::dynamic::dsp(1, 3, result);
+
+	s_pm_dot_pm(pm, pm2, result);
+	if (!s_is_equal(16, result, pm_dot_pm2, error))std::cout << "\"s_pm_dot_pm\" failed" << std::endl;
+
+	s_pm2pq(pm, pq);
+	s_pm2pq(pm2, pq2);
+	s_pq_dot_pq(pq, pq2, result);
+	aris::dynamic::dsp(1, 7, pq);
+	aris::dynamic::dsp(1, 7, result);
+
+	s_pm_dot_pm(pm, pm2, pm3, result);
+	if (!s_is_equal(16, result, pm_dot_pm2_dot_pm3, error))std::cout << "\"s_pm_dot_pm\" failed" << std::endl;
+
+	s_inv_pm_dot_pm(inv_pm, pm2, result);
+	if (!s_is_equal(16, result, pm_dot_pm2, error))std::cout << "\"s_pm_dot_pm\" failed" << std::endl;
+
+	s_pm_dot_inv_pm(pm, inv_pm2, result);
+	if (!s_is_equal(16, result, pm_dot_pm2, error))std::cout << "\"s_pm_dot_pm\" failed" << std::endl;
+
+	s_pm_dot_v3(pm, from_v1, result);
+	if (!s_is_equal(3, result, to_v1, error))std::cout << "\"s_pm_dot_v3\" failed" << std::endl;
+
+	s_pq_dot_v3(pq, from_v1, result);
+	aris::dynamic::dsp(1, 7, pq);
+	aris::dynamic::dsp(1, 3, result);
+
+	s_fill(16, 1, 0, result, 1);
+	s_pm_dot_v3(pm, from_v1_ld, 2, result, 3);
+	if (!s_is_equal(3, result, to_v1_ld, error))std::cout << "\"s_pm_dot_v3 with ld\" failed" << std::endl;
+
+	s_inv_pm_dot_v3(inv_pm, from_v1, result);
+	if (!s_is_equal(3, result, to_v1, error))std::cout << "\"s_pm_dot_v3\" failed" << std::endl;
+
+	s_fill(16, 1, 0, result, 1);
+	s_inv_pm_dot_v3(inv_pm, from_v1_ld, 2, result, 3);
+	if (!s_is_equal(3, result, to_v1_ld, error))std::cout << "\"s_pm_dot_v3 with ld\" failed" << std::endl;
+}
 void test_cross_3(){
 	double result[36];
 	
@@ -2181,6 +2265,7 @@ void test_screw()
 	std::cout << std::endl << "-----------------test screw--------------------" << std::endl;
 
 	test_pm_operation();
+	test_pq_operation();
 	test_cross_3();
 	test_cross_f();
 	test_cross_v();

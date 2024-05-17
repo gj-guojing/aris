@@ -357,5 +357,127 @@ namespace aris::dynamic{
 
 	}
 
+	auto s_eye_in_hand_calib(int n, const double* pq_obj_in_eye, const double* pq_tool_in_base, double* eye_in_tool, double* mem_need)->void  {
+		// see https://zhuanlan.zhihu.com/p/683246806?utm_medium=social&utm_psn=1774712167046189056&utm_source=wechat_session
+		
+		for (int i = 1; i < n; ++i) {
+			double* M = mem_need + 4 * 4 * (i-1);
+			double L[7], R[7];
+
+			s_inv_pq_dot_pq(pq_tool_in_base, pq_tool_in_base + 7 * i, L);
+			s_pq_dot_inv_pq(pq_obj_in_eye, pq_obj_in_eye + 7 * i, R);
+			
+
+			//////////////////////////////////////////////
+			/*
+			const double pe_eye_in_tool[6]{ 0.1,0.2,0.3,0.111,0.221,0.832 };
+			double pq_eye_in_tool[7];
+			s_pe2pq(pe_eye_in_tool, pq_eye_in_tool, "123");
+
+			double pq_l[7], pq_r[7];
+			s_pq_dot_pq(L, pq_eye_in_tool, pq_l);
+			s_pq_dot_pq(pq_eye_in_tool, R, pq_r);
+
+
+			s_pq_dot_pq(pq_tool_in_base + i*7, pq_eye_in_tool, pq_l);
+			s_pq_dot_pq(pq_l, pq_obj_in_eye+i*7, pq_r);
+
+			aris::dynamic::dsp(1, 7, pq_r);
+			*/
+			//////////////////////////////////////////////
+
+			auto sa = L[6];
+			auto sb = R[6];
+			auto va = L + 3;
+			auto vb = R + 3;
+
+			M[0] = sa - sb;
+			M[1] = -(va[0] - vb[0]);
+			M[2] = -(va[1] - vb[1]);
+			M[3] = -(va[2] - vb[2]);
+
+			M[4] = (va[0] - vb[0]);
+			M[8] = (va[1] - vb[1]);
+			M[12] = (va[2] - vb[2]);
+
+			double v1 = va[0] + vb[0];
+			double v2 = va[1] + vb[1];
+			double v3 = va[2] + vb[2];
+
+			M[5] = sa - sb;
+			M[6] = -v3;
+			M[7] = v2;
+
+			M[9] = v3;
+			M[10] = sa - sb;
+			M[11] = -v1;
+			M[13] = -v2;
+			M[14] = v1;
+			M[15] = sa - sb;
+		}
+
+		double V[16];
+		s_svd((n - 1) * 4, 4, mem_need, mem_need + (n - 1) * 4 *4, mem_need, V);
+
+
+		// U size : (n - 1) * 4 *(n - 1) * 4 = 16 * (n-1)^2
+		// S size : (n - 1) * 4 * 4 = 16*(n-1)
+
+		// total : 16 * n * (n-1)
+		eye_in_tool[3] = V[7];
+		eye_in_tool[4] = V[11];
+		eye_in_tool[5] = V[15];
+		eye_in_tool[6] = V[3];
+
+		s_nv(4, 1.0 / s_vv(4, eye_in_tool + 3, eye_in_tool + 3), eye_in_tool + 3);
+
+		// CALIB xyz //
+		auto A = mem_need;
+		auto b = mem_need + n * 9;
+		for (int i = 1; i < n; ++i) {
+			double L[7], R[7];
+			s_inv_pq_dot_pq(pq_tool_in_base, pq_tool_in_base + 7 * i, L);
+			s_pq_dot_inv_pq(pq_obj_in_eye, pq_obj_in_eye + 7 * i, R);
+		
+			s_rq2rm(L + 3, A + (i - 1) * 9);
+			A[(i - 1) * 9 + 0 * 4] -= 1.0;
+			A[(i - 1) * 9 + 1 * 4] -= 1.0;
+			A[(i - 1) * 9 + 2 * 4] -= 1.0;
+
+			s_pq_dot_v3(eye_in_tool, R, b + (i - 1) * 3);
+			b[(i - 1) * 3 + 0] -= L[0];
+			b[(i - 1) * 3 + 1] -= L[1];
+			b[(i - 1) * 3 + 2] -= L[2];
+
+
+			///////////////////////////////////////////////////////
+			/*
+			const double pe_eye_in_tool[6]{ 0.1,0.2,0.3,0.111,0.221,0.832 };
+			double pq_eye_in_tool[7];
+			s_pe2pq(pe_eye_in_tool, pq_eye_in_tool, "123");
+			double b2[3];
+			s_mm(3, 1, 3, A + (i - 1) * 9, pq_eye_in_tool, b2);
+
+			dsp(1, 3, b);
+			dsp(1, 3, b2);
+			*/
+			///////////////////////////////////////////////////////
+		}
+
+
+		
+
+
+
+
+
+
+		s_householder_ut(3 * (n - 1), 3, A, A, b + 3*(n-1));
+		s_householder_ut_sov(3 * (n - 1), 3, 1, A, b + 3*(n-1), b, b);
+
+		eye_in_tool[0] = b[0];
+		eye_in_tool[1] = b[1];
+		eye_in_tool[2] = b[2];
+	}
 
 }

@@ -201,9 +201,9 @@ namespace aris::plan{
 	{
 		// 将q1用单位四元数代替 //
 		double q0[4], q2[4], inv_q1[4];
-		aris::dynamic::s_inv_q(q1_input, inv_q1);
-		aris::dynamic::s_q_dot_q(inv_q1, q0_input, q0);
-		aris::dynamic::s_q_dot_q(inv_q1, q2_input, q2);
+		aris::dynamic::s_inv_rq(q1_input, inv_q1);
+		aris::dynamic::s_rq_dot_rq(inv_q1, q0_input, q0);
+		aris::dynamic::s_rq_dot_rq(inv_q1, q2_input, q2);
 
 		// 将q0 和 q2 放到距离 q1较小的arc上
 		if (q0[3] < 0)
@@ -308,17 +308,17 @@ namespace aris::plan{
 
 		// qb3 dqb3 d2qb3 // 
 		double qb3[4], dqb3[4], d2qb3[4];
-		aris::dynamic::s_q_dot_q(qb1, qb2, qb3);
+		aris::dynamic::s_rq_dot_rq(qb1, qb2, qb3);
 
 		double tem4[4];
-		aris::dynamic::s_q_dot_q(qb1, dqb2, dqb3);
-		aris::dynamic::s_q_dot_q(dqb1, qb2, tem4);
+		aris::dynamic::s_rq_dot_rq(qb1, dqb2, dqb3);
+		aris::dynamic::s_rq_dot_rq(dqb1, qb2, tem4);
 		aris::dynamic::s_va(4, tem4, dqb3);
 
-		aris::dynamic::s_q_dot_q(qb1, d2qb2, d2qb3);
-		aris::dynamic::s_q_dot_q(d2qb1, qb2, tem4);
+		aris::dynamic::s_rq_dot_rq(qb1, d2qb2, d2qb3);
+		aris::dynamic::s_rq_dot_rq(d2qb1, qb2, tem4);
 		aris::dynamic::s_va(4, tem4, d2qb3);
-		aris::dynamic::s_q_dot_q(dqb1, dqb2, tem4);
+		aris::dynamic::s_rq_dot_rq(dqb1, dqb2, tem4);
 		aris::dynamic::s_va(4, 2.0, tem4, d2qb3);
 
 		// theta_b3 & vb3 //
@@ -355,22 +355,22 @@ namespace aris::plan{
 		double q_[4], dq_[4], d2q_[4];
 
 
-		aris::dynamic::s_q_dot_q(qa, qb, q_);
+		aris::dynamic::s_rq_dot_rq(qa, qb, q_);
 
-		aris::dynamic::s_q_dot_q(qa, dqb, dq_);
-		aris::dynamic::s_q_dot_q(dqa, qb, tem4);
+		aris::dynamic::s_rq_dot_rq(qa, dqb, dq_);
+		aris::dynamic::s_rq_dot_rq(dqa, qb, tem4);
 		aris::dynamic::s_va(4, tem4, dq_);
 
-		aris::dynamic::s_q_dot_q(qa, d2qb, d2q_);
-		aris::dynamic::s_q_dot_q(d2qa, qb, tem4);
+		aris::dynamic::s_rq_dot_rq(qa, d2qb, d2q_);
+		aris::dynamic::s_rq_dot_rq(d2qa, qb, tem4);
 		aris::dynamic::s_va(4, tem4, d2q_);
-		aris::dynamic::s_q_dot_q(dqa, dqb, tem4);
+		aris::dynamic::s_rq_dot_rq(dqa, dqb, tem4);
 		aris::dynamic::s_va(4, 2.0, tem4, d2q_);
 
 		// make real q1 //
-		aris::dynamic::s_q_dot_q(q1_input, q_, q);
-		aris::dynamic::s_q_dot_q(q1_input, dq_, dq);
-		aris::dynamic::s_q_dot_q(q1_input, d2q_, d2q);
+		aris::dynamic::s_rq_dot_rq(q1_input, q_, q);
+		aris::dynamic::s_rq_dot_rq(q1_input, dq_, dq);
+		aris::dynamic::s_rq_dot_rq(q1_input, d2q_, d2q);
 	}
 
 	auto s_bezier3_darc_ds(Size dim, const double* dp_ds_input, const double* d2p_ds2_input,

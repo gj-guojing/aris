@@ -47,7 +47,7 @@ namespace aris::dynamic{
 
 	using double3x3 = double[3][3];
 
-	auto ARIS_API s_inv_pm(const double *pm_in, double *pm_out) noexcept->void;
+	auto ARIS_API s_inv_pm(const double *pm_in, double *pm_out) noexcept->double*;
 	auto ARIS_API s_pm_dot_pm(const double *pm1_in, const double *pm2_in, double *pm_out = nullptr) noexcept->double *;
 	template <typename ...Args>
 	auto s_pm_dot_pm(const double *pm1, const double *pm2, Args ...args) noexcept->double *{
@@ -83,7 +83,7 @@ namespace aris::dynamic{
 		plane2[3] = plane1[3] - s_vv(3, plane2, 1, pm + 3, 4);
 	}
 	
-	auto inline s_q_dot_q(const double* q1, const double* q2, double* q3)noexcept->void {
+	auto inline s_rq_dot_rq(const double* q1, const double* q2, double* q3)noexcept->void {
 		//q = [cross(v1, v2) + s1 * v2 + s2 * v1; s1* s2 - v1'*v2];
 
 		q3[0] = -q1[2] * q2[1] + q1[1] * q2[2] + q1[3] * q2[0] + q2[3] * q1[0];
@@ -91,7 +91,7 @@ namespace aris::dynamic{
 		q3[2] = -q1[1] * q2[0] + q1[0] * q2[1] + q1[3] * q2[2] + q2[3] * q1[2];
 		q3[3] = -q1[0] * q2[0] - q1[1] * q2[1] - q1[2] * q2[2] + q1[3] * q2[3];
 	}
-	auto inline s_inv_q_dot_q(const double* q1, const double* q2, double* q3)noexcept->void {
+	auto inline s_inv_rq_dot_rq(const double* q1, const double* q2, double* q3)noexcept->void {
 		//q = [cross(v1, v2) + s1 * v2 + s2 * v1; s1* s2 - v1'*v2];
 
 		q3[0] = -q1[2] * q2[1] + q1[1] * q2[2] - q1[3] * q2[0] + q2[3] * q1[0];
@@ -99,7 +99,7 @@ namespace aris::dynamic{
 		q3[2] = -q1[1] * q2[0] + q1[0] * q2[1] - q1[3] * q2[2] + q2[3] * q1[2];
 		q3[3] = -q1[0] * q2[0] - q1[1] * q2[1] - q1[2] * q2[2] - q1[3] * q2[3];
 	}
-	auto inline s_q_dot_inv_q(const double* q1, const double* q2, double* q3)noexcept->void {
+	auto inline s_rq_dot_inv_rq(const double* q1, const double* q2, double* q3)noexcept->void {
 		//q = [cross(v1, v2) + s1 * v2 + s2 * v1; s1* s2 - v1'*v2];
 
 		q3[0] = -q1[2] * q2[1] + q1[1] * q2[2] + q1[3] * q2[0] - q2[3] * q1[0];
@@ -107,12 +107,19 @@ namespace aris::dynamic{
 		q3[2] = -q1[1] * q2[0] + q1[0] * q2[1] + q1[3] * q2[2] - q2[3] * q1[2];
 		q3[3] = -q1[0] * q2[0] - q1[1] * q2[1] - q1[2] * q2[2] - q1[3] * q2[3];
 	}
-	auto inline s_inv_q(const double* q, double* inv_q)noexcept->void {
+	auto inline s_inv_rq(const double* q, double* inv_q)noexcept->void {
 		inv_q[0] = -q[0];
 		inv_q[1] = -q[1];
 		inv_q[2] = -q[2];
 		inv_q[3] =  q[3];
 	}
+
+	auto ARIS_API s_inv_pq(const double* pq_in, double* pq_out) noexcept->double*;
+	auto ARIS_API s_pq_dot_pq(const double* pq1_in, const double* pq2_in, double* pq_out = nullptr) noexcept->double*;
+	auto ARIS_API s_inv_pq_dot_pq(const double* inv_pq1_in, const double* pq2_in, double* pq_out = nullptr) noexcept->double*;
+	auto ARIS_API s_pq_dot_inv_pq(const double* pq1_in, const double* inv_pq2_in, double* pq_out = nullptr) noexcept->double*;
+	auto ARIS_API s_pq_dot_v3(const double* pq, const double* v3_in, double* v3_out = nullptr) noexcept->double*;
+
 
 	auto inline s_q_to_theta_v(const double* q, const double* dq, const double* ddq,
 							   double &theta, double *v, double &dtheta, double *dv, double &d2theta, double *d2v)noexcept->void 

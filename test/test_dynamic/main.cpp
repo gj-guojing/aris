@@ -15,6 +15,7 @@
 #include "test_dynamic_model_solver_abenics.h"
 #include "test_dynamic_model_solver_wafer_machine.h"
 #include "test_dynamic_model_interaction.h"
+#include "test_dynamic_kinematics.h"
 #include "test_dynamic_plan.h"
 
 #include <aris/dynamic/dynamic.hpp>
@@ -49,7 +50,7 @@ int main(int argc, char *argv[])
 	//aris::dynamic::s_rq2re(rq, re, "123");
 	//aris::dynamic::dsp(1, 3, re);
 
-	test_matrix();
+	//test_matrix();
 	//test_screw();
 	//test_spline();
 	//test_plan();
@@ -66,6 +67,7 @@ int main(int argc, char *argv[])
 	//test_model_solver_stewart();
 	//test_model_solver_abenics();
 	//test_model_solver_wafer_machine();
+	test_kinematics();
 
 	std::cout << "test_dynamic finished, press any key to continue" << std::endl;
 	std::cin.get();

@@ -60,8 +60,11 @@ namespace aris::dynamic{
 	
 	}
 
-
-
+	//
+	// obj_in_eye
+	// tool_in_base
+	// mem_need: n x n x 16
+	auto ARIS_API s_eye_in_hand_calib(int n, const double* pq_obj_in_eye, const double* pq_tool_in_base, double* eye_in_tool, double *mem_need)->void;
 
 
 

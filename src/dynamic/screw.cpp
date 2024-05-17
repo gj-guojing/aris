@@ -15,7 +15,7 @@
 namespace aris::dynamic{
 	auto inline default_out()noexcept->double* { static thread_local double value[36]{ 0 }; return value; }
 
-	auto s_inv_pm(const double *pm_in, double *pm_out) noexcept->void{
+	auto s_inv_pm(const double *pm_in, double *pm_out) noexcept->double*{
 		//转置
 		pm_out[0] = pm_in[0];
 		pm_out[1] = pm_in[4];
@@ -37,6 +37,8 @@ namespace aris::dynamic{
 		pm_out[13] = 0;
 		pm_out[14] = 0;
 		pm_out[15] = 1;
+
+		return pm_out;
 	}
 	auto s_pm_dot_pm(const double *pm1, const double *pm2, double *pm_out) noexcept->double *{
 		pm_out = pm_out ? pm_out : default_out();
@@ -128,6 +130,56 @@ namespace aris::dynamic{
 		v3_out[0] = inv_pm[0] * v3[0] + inv_pm[4] * v3[1] + inv_pm[8] * v3[2];
 		v3_out[1] = inv_pm[1] * v3[0] + inv_pm[5] * v3[1] + inv_pm[9] * v3[2];
 		v3_out[2] = inv_pm[2] * v3[0] + inv_pm[6] * v3[1] + inv_pm[10] * v3[2];
+
+		return v3_out;
+	}
+
+	auto s_inv_pq(const double* pq_in, double* pq_out) noexcept->double* {
+		// 正式开始计算 //
+		pq_out[3] = -pq_in[3];
+		pq_out[4] = -pq_in[4];
+		pq_out[5] = -pq_in[5];
+		pq_out[6] = pq_in[6];
+
+		s_pq_dot_v3(pq_out, pq_in, pq_out);
+		pq_out[0] = -pq_out[0];
+		pq_out[1] = -pq_out[1];
+		pq_out[2] = -pq_out[2];
+
+		return pq_out;
+	}
+	auto s_pq_dot_pq(const double* pq1_in, const double* pq2_in, double* pq_out) noexcept->double* {
+		s_rq_dot_rq(pq1_in + 3, pq2_in + 3, pq_out + 3);
+		s_pq_dot_v3(pq1_in, pq2_in, pq_out);
+		s_va(3, pq1_in, pq_out);
+		return pq_out;
+	}
+	auto s_inv_pq_dot_pq(const double* inv_pq1_in, const double* pq2_in, double* pq_out) noexcept->double* {
+		double inv[7];
+		s_inv_pq(inv_pq1_in, inv);
+		return s_pq_dot_pq(inv, pq2_in, pq_out);
+
+	
+	}
+	auto s_pq_dot_inv_pq(const double* pq1_in, const double* inv_pq2_in, double* pq_out) noexcept->double* {
+		double inv[7];
+		s_inv_pq(inv_pq2_in, inv);
+		return s_pq_dot_pq(pq1_in, inv, pq_out);
+
+
+	}
+	auto s_pq_dot_v3(const double* pq_in, const double* v3_in, double* v3_out) noexcept->double* {
+		auto& q1 = pq_in[3];
+		auto& q2 = pq_in[4];
+		auto& q3 = pq_in[5];
+		auto& q4 = pq_in[6];
+		auto& x = v3_in[0];
+		auto& y = v3_in[1];
+		auto& z = v3_in[2];
+
+		v3_out[0] = x*q1*q1 + 2*y*q1*q2 + 2*z*q1*q3 - x*q2*q2 + 2*z*q2*q4 - x*q3*q3 - 2*y*q3*q4 + x*q4*q4;
+		v3_out[1] = -y*q1*q1 + 2*x*q1*q2 - 2*z*q1*q4 + y*q2*q2 + 2*z*q2*q3 - y*q3*q3 + 2*x*q3*q4 + y*q4*q4;
+		v3_out[2] = -z*q1*q1 + 2*x*q1*q3 + 2*y*q1*q4 - z*q2*q2 + 2*y*q2*q3 - 2*x*q2*q4 + z*q3*q3 + z*q4*q4;
 
 		return v3_out;
 	}
