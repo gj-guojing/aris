@@ -426,6 +426,9 @@ namespace aris::dynamic{
 		s_svd((n - 1) * 4, 4, mem_need, mem_need + (n - 1) * 4 *4, mem_need, V);
 
 
+		aris::dynamic::dsp((n - 1) * 4, 4, mem_need);
+		aris::dynamic::dsp(4, 4, V);
+
 		// U size : (n - 1) * 4 *(n - 1) * 4 = 16 * (n-1)^2
 		// S size : (n - 1) * 4 * 4 = 16*(n-1)
 
