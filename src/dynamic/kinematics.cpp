@@ -367,6 +367,12 @@ namespace aris::dynamic{
 			s_inv_pq_dot_pq(pq_tool_in_base, pq_tool_in_base + 7 * i, L);
 			s_pq_dot_inv_pq(pq_obj_in_eye, pq_obj_in_eye + 7 * i, R);
 			
+			if (L[6] < 0.0) {
+				s_iv(4, L + 3);
+			}
+			if (R[6] < 0.0) {
+				s_iv(4, R + 3);
+			}
 
 			//////////////////////////////////////////////
 			/*
