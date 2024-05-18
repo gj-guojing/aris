@@ -1,0 +1,12 @@
+{
+  "server_port": "5870",
+  "mechmind_path": "C:\\Users\\py033\\source\\repos\\aris\\out\\build\\x64-Debug\\bin\\extri_param.json",
+  "robot_target_position_unit": "mm",
+  "robot_target_angle_unit": "deg",
+  "vision_position_unit": "m",
+  "vision_angle_unit": "rad",
+  "calib_position_unit": "m",
+  "calib_angle_unit": "rad",
+  "calib_position_max_diff_meter": 0.01,
+  "calib_angle_max_diff_rad": 0.05
+}

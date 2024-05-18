@@ -130,6 +130,7 @@ void test_eye_in_hand2()
 
 
 
+
 	double pq_tool_in_base[n][7];
 	double pq_obj_in_eye[n][7];
 
@@ -141,23 +142,24 @@ void test_eye_in_hand2()
 		s_pe2pq(pe_tool_in_base[i], pq_tool_in_base[i], "321");
 		s_pe2pq(pe_obj_in_eye[i], pq_obj_in_eye[i], "321");
 
+	}
+	
+	double pq_eye_in_tool_result[7];
+	double mem[16 * n * n];
+	aris::dynamic::s_eye_in_hand_calib(n, *pq_obj_in_eye, *pq_tool_in_base, pq_eye_in_tool_result, mem);
+	aris::dynamic::dsp(1, 7, pq_eye_in_tool_result);
 
-		//double pq_eye_wrt_tool[7]{ 26.4478, - 143.284, 81.5701, 0.0514753, - 0.263611, 0.963143, -0.0146969 };
-		double pq_eye_wrt_tool[7]{ 27.924852, - 141.300530,   82.107110, - 0.049961,   0.265327, - 0.962756,   0.014378 };
+	for (int i = 0; i < n; ++i) {
+		double pq_eye_wrt_tool[7]{ 26.4478, - 143.284, 81.5701, 0.0514753, - 0.263611, 0.963143, -0.0146969 };
+		//double pq_eye_wrt_tool[7]{ 27.924852, - 141.300530,   82.107110, - 0.049961,   0.265327, - 0.962756,   0.014378 };
+		aris::dynamic::s_vc(7, pq_eye_in_tool_result, pq_eye_wrt_tool);
+		
 		double pq1[7], pq2[7];
 		s_pq_dot_pq(pq_eye_wrt_tool, pq_obj_in_eye[i], pq1);
 		s_pq_dot_pq(pq_tool_in_base[i], pq1,pq2);
 		aris::dynamic::dsp(1, 7, pq2);
 	}
 
-
-	//dsp(1, 4, plane2);
-	double pq_eye_in_tool_result[7];
-	double mem[16 * n * n];
-	aris::dynamic::s_eye_in_hand_calib(n, *pq_obj_in_eye, *pq_tool_in_base, pq_eye_in_tool_result, mem);
-
-	aris::dynamic::dsp(1, 7, pq_eye_in_tool_result);
-	aris::dynamic::dsp(1, 7, pq_eye_in_tool);
 
 	std::cout << "wait" << std::endl;
 }
@@ -168,6 +170,9 @@ void test_kinematics()
 
 	test_eye_in_hand2();
 	//test_interp_plane();
+
+	
+
 
 	std::cout << "-----------------test kinematics finished-----------" << std::endl << std::endl;
 }

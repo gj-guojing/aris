@@ -139,7 +139,7 @@ target_include_directories(aris_lib
 set(aris_LIBRARIES optimized aris::aris_lib debug aris::debug::aris_lib)
 
 install(TARGETS aris_lib EXPORT aris-targets-debug CONFIGURATIONS Debug DESTINATION "lib/debug")
-install(TARGETS aris_lib EXPORT aris-targets-release CONFIGURATIONS Release DESTINATION "lib/release")
+install(TARGETS aris_lib EXPORT aris-targets-release CONFIGURATIONS Release RelWithDebInfo DESTINATION "lib/release")
 set(ARIS_LINK_LIB aris_lib)
 
 ## install exports ##
@@ -196,11 +196,14 @@ endif(BUILD_DEMOS)
 ################################### build tools for aris ####################################
 option(BUILD_TOOLS "build aris tools" OFF)
 if(BUILD_TOOLS)
-	foreach(aris_tool doc_server)
+	foreach(aris_tool doc_server eye_in_hand_server eye_in_hand_client)
 		file(GLOB SOURCES tool/${aris_tool}/*.h tool/${aris_tool}/*.c tool/${aris_tool}/*.cpp)
 		add_executable(tool_${aris_tool} ${SOURCES})
 		target_link_libraries(tool_${aris_tool} ${ARIS_LINK_LIB} ${RELY_LINK_LIB})
-		install(TARGETS tool_${aris_tool} DESTINATION "tool")
+		install(TARGETS tool_${aris_tool} DESTINATION tool/${aris_tool})
+		if(EXISTS ${PROJECT_SOURCE_DIR}/tool/${aris_tool}/resource)
+			install(DIRECTORY tool/${aris_tool}/resource/ DESTINATION tool/${aris_tool})
+		endif()
 	endforeach(aris_tool)
 endif(BUILD_TOOLS)
 ################################### build docs for aris ####################################
