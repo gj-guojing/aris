@@ -11,6 +11,7 @@
 #include <list>
 
 #include "aris/dynamic/math_matrix.hpp"
+#include "aris/dynamic/pose.hpp"
 #include "aris/dynamic/screw.hpp"
 #include "aris/dynamic/kinematics.hpp"
 

@@ -323,7 +323,7 @@ namespace aris::plan{
 
 		// theta_b3 & vb3 //
 		double theta_b3, vb3[3], dtheta_b3, dvb3[3], d2theta_b3, d2vb3[3];
-		aris::dynamic::s_q_to_theta_v(qb3, dqb3, d2qb3, theta_b3, vb3, dtheta_b3, dvb3, d2theta_b3, d2vb3);
+		aris::dynamic::s_rq_to_theta_v(qb3, dqb3, d2qb3, theta_b3, vb3, dtheta_b3, dvb3, d2theta_b3, d2vb3);
 
 		// qb3 dqb3 d2qb3 //
 		double qb[4], dqb[4], d2qb[4];

@@ -2,6 +2,7 @@
 #include <aris/dynamic/math_spline.hpp>
 
 #include <aris/dynamic/kinematics.hpp>
+#include <aris/dynamic/pose.hpp>
 #include <aris/dynamic/screw.hpp>
 #include <aris/dynamic/collision.hpp>
 #include <aris/dynamic/plan.hpp>
