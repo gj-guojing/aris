@@ -47,6 +47,38 @@ namespace aris::dynamic{
 
 	using double3x3 = double[3][3];
 
+	//
+	// pose type 可选：
+	//
+	//     pm : 4x4
+	//     pq : 7x1
+	//  pe123 : 6x1
+	//  pe313 : 6x1
+	//  pe321 : 6x1
+	//    ... : 任意形式的pe
+	//    ipm : 4x4
+	//    ipq : 7x1
+	// ipe123 : 6x1
+	// ipe313 : 6x1  
+	// ipe321 : 6x1
+	//    ... : 任意形式的ipe
+	//
+	// 其中 invpm 是指 pm 的逆
+	//
+	// 例1 : s_pose2pose(pm1, "pm", pm2, "ipm"); 可以求得 pm2 = pm1^-1
+	// 例2 : s_pose2pose(pe1, "pe321", pq, "pq"); 可以将321的欧拉角转成位置和四元数
+	// 
+	auto ARIS_API s_pose2pose(const double* pose1, const char *pose_type, double* pose2, const char *pose2_type)noexcept->double*;
+	auto ARIS_API s_pose_dot_pose(const double* pose1, const char* pose1_type, const double* pose2, const char* pose2_type, double* pose3 = nullptr, const char* pose3_type = "pm")noexcept->double*;
+	auto ARIS_API s_pose_dot_v3(const double* pose, const char* pose_type, const double* v3_in, double* v3_out = nullptr) noexcept->double*;
+
+	template <typename ...Args>
+	auto s_pose_dot_pose(const double* pose1, const char* pose1_type, const double* pose2, const char* pose2_type, Args ...args) noexcept->double* {
+		double pm[16];
+		s_pose_dot_pose(pose1, pose1_type, pose2, pose2_type, pm, "pm");
+		return s_pose_dot_pose(pm, "pm", args...);
+	}
+
 	auto ARIS_API s_inv_rm(const double* rm, double* inv_rm = nullptr)noexcept->double*;
 	auto ARIS_API s_rm_dot_rm(const double* rm1, const double* rm2, double* rm3 = nullptr)noexcept->double*;
 	auto ARIS_API s_inv_rm_dot_rm(const double* rm1, const double* rm2, double* rm3 = nullptr)noexcept->double*;

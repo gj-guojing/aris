@@ -7,6 +7,182 @@ using namespace aris::dynamic;
 
 const double error = 1e-10;
 
+void test_pose_operation() {
+	const double pe313[6] = { 0.1, 0.2, 0.3,0.000423769269879415,   1.38980987554835,   1.79253453841257 };
+	const double pe321[6] = { 0.1, 0.2, 0.3,2.46823966120654, -1.28551725555848,  5.40636866254317 };
+	const double pq[7] = { 0.1, 0.2, 0.3,0.4,-0.5, 0.6, std::sqrt(1 - 0.4 * 0.4 - 0.5 * 0.5 - 0.6 * 0.6) };
+	const double pm[16] = { -0.22, -0.975499782797526,   0.000416847668728071, 0.1,
+		0.175499782797526, -0.04, -0.983666521865018, 0.2,
+		0.959583152331272, -0.216333478134982,   0.18, 0.3,
+		0,0,0,1 };
+
+	const double inv_pm[16]{ -0.22,0.175499782797526,0.959583152331272, -0.300974902258887,
+		-0.975499782797526, -0.04, -0.216333478134982,0.170450021720247,
+		0.000416847668728071, -0.983666521865018,0.18,0.142691619606131,
+		0,0,0,1 };
+
+	const double pe313_2[6] = { 0.1,   0.2,   0.3,   0.4,   0.5,   0.6 };
+	const double pe321_2[6] = { 0.1,   0.2,   0.3,   0.9407036672071061, - 0.2741242841334880,   0.4235879050181210 };
+	const double pq2[7]{ 0.1000000000000000,   0.2000000000000000,   0.3000000000000000,   0.2461679699645254, - 0.0246991825443315,   0.4645213596389284,   0.8503006452922329 };
+	const double pm2[16]{ 0.567219713641686,-0.802125918959455,0.186697098503681,0.1,
+		0.77780532845257,0.447242474005492,-0.441580163137156,0.2,
+		0.270704021926224,0.395686971707304,0.877582561890373,0.3,
+		0,0,0,1 };
+
+	const double pe313_3[6] = { 0.11,0.22, - 0.33,   0.3429889306768038,   0.9896374366179882,   6.0793638836224995 };
+	const double pe321_3[6] = { 0.11,0.22, -0.33,   0.2300000000000000,   0.1699999999999999,   0.9799999999999995 };
+	const double pq3[7]{ 0.11,0.22, -0.33,  0.4572339663606721 ,0.1282210261505954,0.0611881113319086,0.8779251012988581 };
+	const double pm3[16]{ 0.959630766969045,0.00981685903664117,0.281091480420624,0.11,
+		0.224691174394048,0.574386230075444,-0.787143147622555,0.22,
+		-0.169182349066996,0.818525557315332,0.548992936917952,-0.33,
+		0,0,0,1 };
+
+	const double pm_dot_pm2[16]{ -0.883424423624956,-0.259652292887403,0.390053809802222,-0.116974902258887,
+		-0.197847760298552,-0.547886650720495,-0.812820079542285,-0.0855499782797527,
+		0.424755872811384,-0.79523638294572,0.432644824020405,0.406691619606131,
+		0,0,0,1, };
+	const double pm_dot_pm2_dot_pm3[16]{ -0.972093055630252,0.16145585737304,0.170197230633687, -0.399992850527594,
+		-0.175451282517831, -0.981954799994014, -0.0705805797055172,0.0403823311778517,
+		0.155730339556197, -0.0984722137897536,0.982879079263088,0.135689969440591,
+		0,0,0,1 };
+
+	const double from_v1[]{ 0.45,0.65,0.13 };
+	const double to_v1[]{ -0.733020668621457,-0.0749017455835656,0.314595657761334 };
+
+	double result[36];
+	// test s_pose2pose
+	{
+		s_pose2pose(pq, "pq", result, "pm");
+		if (!s_is_equal(16, result, pm, error))std::cout << "\"s_pose2pose pq pm\" failed" << std::endl;
+
+		s_pose2pose(pm, "pm", result, "pq");
+		if (!s_is_equal(7, result, pq, error))std::cout << "\"s_pose2pose pm pq\" failed" << std::endl;
+
+		s_pose2pose(pq, "ipq", result, "pm");
+		if (!s_is_equal(16, result, inv_pm, error))std::cout << "\"s_pose2pose ipq pm\" failed" << std::endl;
+
+		s_pose2pose(inv_pm, "pm", result, "ipq");
+		if (!s_is_equal(7, result, pq, error))std::cout << "\"s_pose2pose pm ipq\" failed" << std::endl;
+
+		s_pose2pose(pq, "pq", result, "ipm");
+		if (!s_is_equal(16, result, inv_pm, error))std::cout << "\"s_pose2pose pq ipm\" failed" << std::endl;
+
+		s_pose2pose(inv_pm, "ipm", result, "pq");
+		if (!s_is_equal(7, result, pq, error))std::cout << "\"s_pose2pose ipm pq\" failed" << std::endl;
+
+		s_pose2pose(pq, "ipq", result, "ipm");
+		if (!s_is_equal(16, result, pm, error))std::cout << "\"s_pose2pose ipq ipm\" failed" << std::endl;
+
+		s_pose2pose(pm, "ipm", result, "ipq");
+		if (!s_is_equal(7, result, pq, error))std::cout << "\"s_pose2pose ipm ipq\" failed" << std::endl;
+
+		// 
+
+		s_pose2pose(pm, "pm", result, "pe313");
+		if (!s_is_equal(6, result, pe313, error))std::cout << "\"s_pose2pose ipm pe313\" failed" << std::endl;
+
+		s_pose2pose(pe313, "pe313", result, "pm");
+		if (!s_is_equal(16, result, pm, error))std::cout << "\"s_pose2pose pe313 pm\" failed" << std::endl;
+
+		s_pose2pose(inv_pm, "ipm", result, "pe313");
+		if (!s_is_equal(6, result, pe313, error))std::cout << "\"s_pose2pose ipm pe313\" failed" << std::endl;
+
+		s_pose2pose(pe313, "pe313", result, "ipm");
+		if (!s_is_equal(16, result, inv_pm, error))std::cout << "\"s_pose2pose pe313 ipm\" failed" << std::endl;
+
+		s_pose2pose(inv_pm, "pm", result, "ipe313");
+		if (!s_is_equal(6, result, pe313, error))std::cout << "\"s_pose2pose pm ipe313\" failed" << std::endl;
+
+		s_pose2pose(pe313, "ipe313", result, "pm");
+		if (!s_is_equal(16, result, inv_pm, error))std::cout << "\"s_pose2pose ipe313 pm\" failed" << std::endl;
+
+		s_pose2pose(pm, "ipm", result, "ipe313");
+		if (!s_is_equal(6, result, pe313, error))std::cout << "\"s_pose2pose ipm pe313\" failed" << std::endl;
+
+		s_pose2pose(pe313, "ipe313", result, "ipm");
+		if (!s_is_equal(16, result, pm, error))std::cout << "\"s_pose2pose ipe313 ipm\" failed" << std::endl;
+
+		// 
+
+		s_pose2pose(pm, "pm", result, "pe321");
+		if (!s_is_equal(6, result, pe321, error))std::cout << "\"s_pose2pose ipm pe321\" failed" << std::endl;
+
+		s_pose2pose(pe321, "pe321", result, "pm");
+		if (!s_is_equal(16, result, pm, error))std::cout << "\"s_pose2pose pe321 pm\" failed" << std::endl;
+
+		s_pose2pose(inv_pm, "ipm", result, "pe321");
+		if (!s_is_equal(6, result, pe321, error))std::cout << "\"s_pose2pose ipm pe321\" failed" << std::endl;
+
+		s_pose2pose(pe321, "pe321", result, "ipm");
+		if (!s_is_equal(16, result, inv_pm, error))std::cout << "\"s_pose2pose pe321 ipm\" failed" << std::endl;
+
+		s_pose2pose(inv_pm, "pm", result, "ipe321");
+		if (!s_is_equal(6, result, pe321, error))std::cout << "\"s_pose2pose pm ipe321\" failed" << std::endl;
+
+		s_pose2pose(pe321, "ipe321", result, "pm");
+		if (!s_is_equal(16, result, inv_pm, error))std::cout << "\"s_pose2pose ipe321 pm\" failed" << std::endl;
+
+		s_pose2pose(pm, "ipm", result, "ipe321");
+		if (!s_is_equal(6, result, pe321, error))std::cout << "\"s_pose2pose ipm pe321\" failed" << std::endl;
+
+		s_pose2pose(pe321, "ipe321", result, "ipm");
+		if (!s_is_equal(16, result, pm, error))std::cout << "\"s_pose2pose ipe321 ipm\" failed" << std::endl;
+	}
+
+	// test s_pose_dot_pose
+	{
+		s_pose_dot_pose(pm, "pm", pm2, "pm", result, "pm");
+		if (!s_is_equal(16, result, pm_dot_pm2, error))std::cout << "\"s_pose_dot_pose pm pm pm\" failed" << std::endl;
+
+		s_pose_dot_pose(pm, "pm", pm2, "pm", pm3, "pm", result, "pm");
+		if (!s_is_equal(16, result, pm_dot_pm2_dot_pm3, error))std::cout << "\"s_pose_dot_pose pm pm pm pm\" failed" << std::endl;
+
+		s_pose_dot_pose(pe313, "pe313", pe313_2, "pe313", result, "pm");
+		if (!s_is_equal(16, result, pm_dot_pm2, error))std::cout << "\"s_pose_dot_pose pe313 pe313 pm\" failed" << std::endl;
+
+		s_pose_dot_pose(pe313_3, "ipe313", pe313_2, "ipe313", pe313, "ipe313", result, "ipm");
+		if (!s_is_equal(16, result, pm_dot_pm2_dot_pm3, error))std::cout << "\"s_pose_dot_pose ipe313 ipe313 ipe313 pm\" failed" << std::endl;
+
+		s_pose_dot_pose(pe321, "pe321", pe321_2, "pe321", result, "pm");
+		if (!s_is_equal(16, result, pm_dot_pm2, error))std::cout << "\"s_pose_dot_pose pe321 pe321 pm\" failed" << std::endl;
+
+		s_pose_dot_pose(pe321_3, "ipe321", pe321_2, "ipe321", pe321, "ipe321", result, "ipm");
+		if (!s_is_equal(16, result, pm_dot_pm2_dot_pm3, error))std::cout << "\"s_pose_dot_pose ipe321 ipe321 ipe321 pm\" failed" << std::endl;
+
+		s_pose_dot_pose(pq, "pq", pq2, "pq", result, "pm");
+		if (!s_is_equal(16, result, pm_dot_pm2, error))std::cout << "\"s_pose_dot_pose pq pq pm\" failed" << std::endl;
+
+		s_pose_dot_pose(pq3, "ipq", pq2, "ipq", pq, "ipq", result, "ipm");
+		if (!s_is_equal(16, result, pm_dot_pm2_dot_pm3, error))std::cout << "\"s_pose_dot_pose ipq ipq ipq pm\" failed" << std::endl;
+	}
+
+	// test s_pose_dot_v3
+	{
+		s_pose_dot_v3(pm, "pm", from_v1, result);
+		if (!s_is_equal(3, result, to_v1, error))std::cout << "\"s_pose_dot_v3 pm\" failed" << std::endl;
+
+		s_pose_dot_v3(pm, "ipm", to_v1, result);
+		if (!s_is_equal(3, result, from_v1, error))std::cout << "\"s_pose_dot_v3 ipm\" failed" << std::endl;
+
+		s_pose_dot_v3(pq, "pq", from_v1, result);
+		if (!s_is_equal(3, result, to_v1, error))std::cout << "\"s_pose_dot_v3 pq\" failed" << std::endl;
+
+		s_pose_dot_v3(pq, "ipq", to_v1, result);
+		if (!s_is_equal(3, result, from_v1, error))std::cout << "\"s_pose_dot_v3 ipq\" failed" << std::endl;
+
+		s_pose_dot_v3(pe321, "pe321", from_v1, result);
+		if (!s_is_equal(3, result, to_v1, error))std::cout << "\"s_pose_dot_v3 pe321\" failed" << std::endl;
+
+		s_pose_dot_v3(pe321, "ipe321", to_v1, result);
+		if (!s_is_equal(3, result, from_v1, error))std::cout << "\"s_pose_dot_v3 ipe321\" failed" << std::endl;
+
+		s_pose_dot_v3(pe313, "pe313", from_v1, result);
+		if (!s_is_equal(3, result, to_v1, error))std::cout << "\"s_pose_dot_v3 pe313\" failed" << std::endl;
+
+		s_pose_dot_v3(pe313, "ipe313", to_v1, result);
+		if (!s_is_equal(3, result, from_v1, error))std::cout << "\"s_pose_dot_v3 ipe313\" failed" << std::endl;
+	}
+}
 void test_rm_operation() {
 	const double rm[9]{ -0.22, -0.975499782797526,   0.000416847668728071,
 		0.175499782797526, -0.04, -0.983666521865018, 
@@ -1782,6 +1958,7 @@ void test_pose()
 {
 	std::cout << std::endl << "-----------------test pose--------------------" << std::endl;
 
+	test_pose_operation();
 	test_rm_operation();
 	test_pm_operation();
 	test_rq_operation();

@@ -16,6 +16,89 @@
 namespace aris::dynamic{
 	auto inline default_out()noexcept->double* { static thread_local double value[36]{ 0 }; return value; }
 
+
+	auto convert_pose_to_pm(const double* pose, const char* pose1_type, double* pm)->void {
+		// type 最多为9个字符 
+		if (std::strncmp(pose1_type, "pm", 2) == 0) {
+			s_vc(16, pose, pm);
+		}
+		else if (std::strncmp(pose1_type, "pq", 2) == 0) {
+			s_pq2pm(pose, pm);
+		}
+		else if (std::strncmp(pose1_type, "pe", 2) == 0) {
+			s_pe2pm(pose, pm, pose1_type + 2);
+		}
+		else if (std::strncmp(pose1_type, "ipm", 3) == 0) {
+			s_inv_pm(pose, pm);
+		}
+		else if (std::strncmp(pose1_type, "ipq", 3) == 0) {
+			double pm2[16];
+			s_pq2pm(pose, pm2);
+			s_inv_pm(pm2, pm);
+		}
+		else if (std::strncmp(pose1_type, "ipe", 3) == 0) {
+			double pm2[16];
+			s_pe2pm(pose, pm2, pose1_type + 3);
+			s_inv_pm(pm2, pm);
+		}
+		else {
+			throw std::runtime_error("invalid pose type in convert_pose_to_pm");
+		}
+	}
+	auto convert_pm_to_pose(const double* pm, double* pose, const char* pose_type) -> void {
+		// type 最多为9个字符 
+		if (std::strncmp(pose_type, "pm", 2) == 0) {
+			s_vc(16, pm, pose);
+		}
+		else if (std::strncmp(pose_type, "pq", 2) == 0) {
+			s_pm2pq(pm, pose);
+		}
+		else if (std::strncmp(pose_type, "pe", 2) == 0) {
+			s_pm2pe(pm, pose, pose_type + 2);
+		}
+		else if (std::strncmp(pose_type, "ipm", 3) == 0) {
+			s_inv_pm(pm, pose);
+		}
+		else if (std::strncmp(pose_type, "ipq", 3) == 0) {
+			double pm2[16];
+			s_inv_pm(pm, pm2);
+			s_pm2pq(pm2, pose);
+		}
+		else if (std::strncmp(pose_type, "ipe", 3) == 0) {
+			double pm2[16];
+			s_inv_pm(pm, pm2);
+			s_pm2pe(pm2, pose, pose_type + 3);
+		}
+		else {
+			throw std::runtime_error("invalid pose type in convert_pm_to_pose");
+		}
+	}
+	auto s_pose2pose(const double* pose1, const char* pose1_type, double* pose2, const char* pose2_type)noexcept->double*{
+		double pm[16];
+		convert_pose_to_pm(pose1, pose1_type, pm);
+		convert_pm_to_pose(pm, pose2, pose2_type);
+
+		return pose2;
+	}
+	auto s_pose_dot_pose(const double* pose1, const char* pose1_type, const double* pose2, const char* pose2_type, double* pose3, const char* pose3_type)noexcept->double* {
+		pose3 = pose3 ? pose3 : default_out();
+		
+		double pm1[16], pm2[16], pm3[16];
+		convert_pose_to_pm(pose1, pose1_type, pm1);
+		convert_pose_to_pm(pose2, pose2_type, pm2);
+		s_pm_dot_pm(pm1, pm2, pm3);
+		convert_pm_to_pose(pm3, pose3, pose3_type);
+
+		return pose3;
+	}
+	auto s_pose_dot_v3(const double* pose, const char* pose_type, const double* v3_in, double* v3_out) noexcept->double* {
+		double pm[16];
+		convert_pose_to_pm(pose, pose_type, pm);
+		s_pm_dot_v3(pm, v3_in, v3_out);
+
+		return v3_out;
+	}
+
 	auto s_inv_rm(const double* rm, double* inv_rm)noexcept->double* {
 		inv_rm[0] = rm[0];
 		inv_rm[1] = rm[3];
