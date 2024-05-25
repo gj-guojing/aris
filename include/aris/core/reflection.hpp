@@ -491,15 +491,6 @@ namespace aris::core{
 		Type * type_;
 	};
 
-	auto inline charToStr(void* value)->std::string{
-		std::string ret;
-		if(*reinterpret_cast<char*>(value) != '\0')ret.push_back(*reinterpret_cast<char*>(value));
-		return ret;
-	}
-	auto inline strToChar(void* value, std::string_view str)->void{
-		if (str.empty())*reinterpret_cast<char*>(value) = 0;
-		else *reinterpret_cast<char*>(value) = str[0];
-	}
 }
 
 #endif

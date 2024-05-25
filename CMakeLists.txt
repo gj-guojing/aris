@@ -157,7 +157,6 @@ install(FILES ${PROJECT_BINARY_DIR}/aris-config.cmake DESTINATION "share/aris/cm
 ## install tools ##
 install(DIRECTORY sh DESTINATION .)
 
-
 ################################### build tests for aris ####################################
 option(BUILD_TESTS "build aris tests" OFF)
 if(BUILD_TESTS)
@@ -196,7 +195,7 @@ endif(BUILD_DEMOS)
 ################################### build tools for aris ####################################
 option(BUILD_TOOLS "build aris tools" OFF)
 if(BUILD_TOOLS)
-	foreach(aris_tool doc_server eye_in_hand_server eye_in_hand_client)
+	foreach(aris_tool doc_server eye_in_hand_server eye_in_hand_client universal_server)
 		file(GLOB SOURCES tool/${aris_tool}/*.h tool/${aris_tool}/*.c tool/${aris_tool}/*.cpp)
 		add_executable(tool_${aris_tool} ${SOURCES})
 		target_link_libraries(tool_${aris_tool} ${ARIS_LINK_LIB} ${RELY_LINK_LIB})

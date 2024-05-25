@@ -56,16 +56,16 @@ namespace aris::dynamic{
 	//  pe313 : 6x1
 	//  pe321 : 6x1
 	//    ... : 任意形式的pe
-	//    ipm : 4x4
-	//    ipq : 7x1
-	// ipe123 : 6x1
+	//    ipm : 4x4 pm 的逆
+	//    ipq : 7x1 pq 的逆
+	// ipe123 : 6x1 pe 的逆
 	// ipe313 : 6x1  
 	// ipe321 : 6x1
 	//    ... : 任意形式的ipe
 	//
-	// 其中 invpm 是指 pm 的逆
+	// 其中 ipm 是指 pm 的逆
 	//
-	// 例1 : s_pose2pose(pm1, "pm", pm2, "ipm"); 可以求得 pm2 = pm1^-1
+	// 例1 : s_pose2pose(pm1, "pm", pm2, "ipm"); 可以求得 pm2^-1 = pm1    =>    pm2 = pm1^-1
 	// 例2 : s_pose2pose(pe1, "pe321", pq, "pq"); 可以将321的欧拉角转成位置和四元数
 	// 
 	auto ARIS_API s_pose2pose(const double* pose1, const char *pose_type, double* pose2, const char *pose2_type)noexcept->double*;
