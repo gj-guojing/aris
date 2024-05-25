@@ -208,6 +208,7 @@ int main(int argc, char *argv[]){
 		ARIS_COUT << "WARNING: FAILED TO FIND cs.xml File, use default param" << std::endl;
 		cs.planRoot().planPool().add<CalibEyeInHandPlan>();
 		cs.planRoot().planPool().add<SysCmdPlan>();
+		cs.interfacePool().add<aris::server::WebInterface>("tcp_interface", "5870", aris::core::Socket::Type::TCP);
 		aris::core::toXmlFile(cs, cs_xml_path);
 	}
 
