@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "aris/dynamic/math_matrix.hpp"
+#include "aris/dynamic/pose.hpp"
 #include "aris/dynamic/kinematics.hpp"
 
 namespace aris::dynamic{
