@@ -375,24 +375,6 @@ namespace aris::dynamic{
 				s_iv(4, R + 3);
 			}
 
-			//////////////////////////////////////////////
-			/*
-			const double pe_eye_in_tool[6]{ 0.1,0.2,0.3,0.111,0.221,0.832 };
-			double pq_eye_in_tool[7];
-			s_pe2pq(pe_eye_in_tool, pq_eye_in_tool, "123");
-
-			double pq_l[7], pq_r[7];
-			s_pq_dot_pq(L, pq_eye_in_tool, pq_l);
-			s_pq_dot_pq(pq_eye_in_tool, R, pq_r);
-
-
-			s_pq_dot_pq(pq_tool_in_base + i*7, pq_eye_in_tool, pq_l);
-			s_pq_dot_pq(pq_l, pq_obj_in_eye+i*7, pq_r);
-
-			aris::dynamic::dsp(1, 7, pq_r);
-			*/
-			//////////////////////////////////////////////
-
 			auto sa = L[6];
 			auto sb = R[6];
 			auto va = L + 3;

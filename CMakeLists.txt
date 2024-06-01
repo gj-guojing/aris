@@ -110,8 +110,8 @@ foreach(target robot server plan dynamic control sensor core ext)
 	)
 	
 	set_target_properties(aris_${target} PROPERTIES PUBLIC_HEADER "${HEADERS}")
-	set(aris_LIBRARIES ${aris_LIBRARIES} optimized aris::aris_${target} debug aris::debug::aris_${target})
-	set(ARIS_LINK_LIB ${ARIS_LINK_LIB} aris_${target})
+	#set(aris_LIBRARIES ${aris_LIBRARIES} optimized aris::aris_${target} debug aris::debug::aris_${target})
+	#set(ARIS_LINK_LIB ${ARIS_LINK_LIB} aris_${target})
 	set(ARIS_OBJECTS ${ARIS_OBJECTS} $<TARGET_OBJECTS:aris_${target}>)
 	set(ARIS_HEADERS ${ARIS_HEADERS} include/aris/${target})
 	
@@ -154,8 +154,25 @@ set(aris_LIBRARIES ${aris_LIBRARIES} ${RELY_LINK_LIB})
 configure_package_config_file(config/aris-config.cmake.in ${PROJECT_BINARY_DIR}/aris-config.cmake INSTALL_DESTINATION "share/aris/cmake")
 install(FILES ${PROJECT_BINARY_DIR}/aris-config.cmake DESTINATION "share/aris/cmake")
 
-## install tools ##
+## install sh ##
 install(DIRECTORY sh DESTINATION .)
+
+## 确保install之后的二进制可以链接到aris_lib
+if(UNIX)
+	#change rpath
+	#https://bewaremypower.github.io/2019/09/05/%E9%93%BE%E6%8E%A5%E9%80%89%E9%A1%B9RPATH%E4%BB%A5%E5%8F%8A%E5%9C%A8cmake%E5%92%8Cgcc%E4%B8%AD%E7%9A%84%E4%BD%BF%E7%94%A8/
+	if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+		set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib/debug")
+	else()
+		set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib/release")
+	endif()
+	set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+elseif(WIN32)
+	
+	
+
+endif()
+
 
 ################################### build tests for aris ####################################
 option(BUILD_TESTS "build aris tests" OFF)
