@@ -855,13 +855,13 @@ void test_householder(){
 
 
 
-		s_householder_up2pinv(m, n, rank, U_p, p, r1_, r2_);
+		s_householder_up2pinv(m, n, rank, U_p, p, r1_);
 		if (!(s_is_equal(n, m, r1_, pinv, error)))std::cout << "\"s_householder_up2pinv\" failed" << std::endl;
 
 		s_mc(m, n, U_p, n, i1_, u_t);
 		s_mc(m, 1, tau_p, 1, i2_, tau_t);
 		s_mc(m, rhs, b, rhs, i3_, b_t);
-		s_householder_up2pinv(m, n, rank, i1_, u_t, p, r1_, pinv_t, r2_, 2);
+		s_householder_up2pinv(m, n, rank, i1_, u_t, p, r1_, pinv_t);
 		if (!(s_is_equal(n, m, r1_, pinv_t, pinv, m, error)))std::cout << "\"s_householder_up2pinv ld\" failed" << std::endl;
 
 

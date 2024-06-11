@@ -1424,8 +1424,8 @@ namespace aris::dynamic{
 	//    U :        m x n
 	//    p : max(m,n) x 1
 	//    x :        n x m
-	template<typename UType, typename XType, typename TauType2>
-	auto inline s_householder_up2pinv(aris::Size m, aris::Size n, aris::Size rank, const double* U, UType u_t, const aris::Size* p, double* x, XType x_t, double* tau2, TauType2 t_t, double zero_check = 1e-10)noexcept->void
+	template<typename UType, typename XType>
+	auto inline s_householder_up2pinv(aris::Size m, aris::Size n, aris::Size rank, const double* U, UType u_t, const aris::Size* p, double* x, XType x_t, double zero_check = 1e-10)noexcept->void
 	{
 		// X 是 A 的 moore penrose 逆，为 n x m 维
 		//
@@ -1574,7 +1574,7 @@ namespace aris::dynamic{
 		//
 		//
 		// make S and tau
-		for (Size i(-1), k0i{ at(0, rank, T(x_t)) }, ti{ 0 }; ++i < std::min({ n - rank, n, n - 1 }); k0i = next_c(k0i, T(x_t)), ti = next_r(ti, t_t)) {
+		for (Size i(-1), k0i{ at(0, rank, T(x_t)) }; ++i < std::min({ n - rank, n, n - 1 }); k0i = next_c(k0i, T(x_t))) {
 			double rho = std::sqrt(s_vv(rank, x + k0i, T(x_t), x + k0i, T(x_t)) + 1.0);
 
 			// Aii 为 -1.0
@@ -1613,7 +1613,7 @@ namespace aris::dynamic{
 		//   |   S * ST * (R1\QT)  |
 		//   |                     |
 		// n [                     ]
-		for (Size i(n - rank), k0i{ at(0, n - 1, T(x_t)) }, ti{ at(n - rank - 1, t_t) }; --i < n - rank; k0i = last_c(k0i, T(x_t)), ti = last_r(ti, t_t)) {
+		for (Size i(n - rank), k0i{ at(0, n - 1, T(x_t)) }; --i < n - rank; k0i = last_c(k0i, T(x_t))) {
 			double tau = (1.0 + s_vv(rank, x + k0i, T(x_t), x + k0i, T(x_t))) / 2;
 
 			for (Size j(rank - 1), x0j{ at(0, rank, x_t) }; ++j < m; x0j = next_c(x0j, x_t)) {
@@ -1641,7 +1641,7 @@ namespace aris::dynamic{
 				}
 
 				return;
-				};
+			};
 			iter_func(iter_func, m, n, i, 0, 0, k0i, rank, tau, x, x_t);
 
 			//for (Size j(-1), x0j{ at(0, 0, x_t) }, tj{ at(n - rank,t_t) }; ++j < rank; x0j = next_c(x0j, x_t), tj = next_r(tj, t_t)) {
@@ -1656,7 +1656,7 @@ namespace aris::dynamic{
 		// permutate
 		s_permutate_inv(n, m, p, x, x_t);
 	}
-	auto inline s_householder_up2pinv(aris::Size m, aris::Size n, aris::Size rank, const double* U, const aris::Size* p, double* x, double* tau2, double zero_check = 1e-10)noexcept->void { s_householder_up2pinv(m, n, rank, U, n, p, x, m, tau2, 1, zero_check); }
+	auto inline s_householder_up2pinv(aris::Size m, aris::Size n, aris::Size rank, const double* U, const aris::Size* p, double* x, double zero_check = 1e-10)noexcept->void { s_householder_up2pinv(m, n, rank, U, n, p, x, m, zero_check); }
 
 
 	//#define ARIS_DEBUG_DYNAMIC_SVD
