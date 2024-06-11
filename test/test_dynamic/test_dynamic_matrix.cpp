@@ -12,6 +12,271 @@ const double error = 1e-10;
 
 #define ARIS_DEBUG_DYNAMIC_SVD
 
+using Size = aris::Size;
+
+template<typename AType, typename XType>
+auto inline s_mv(aris::Size m, const double* A, AType a_t, double* x, XType x_t, aris::Size i = 0)noexcept->void{
+	if (i == m - 1) {
+		x[at(i, x_t)] = s_vv(A + at(i, 0, a_t), x, x_t);
+		return;
+	}
+	else {
+		double x_i = s_vv(A + at(i, 0, a_t), x, x_t);
+		s_mv(m, A, a_t, x, x_t, i + 1);
+		x[at(i, x_t)] = x_i;
+	}
+}
+
+
+template<typename UType, typename XType, typename TauType2>
+auto inline s_householder_up2pinv(aris::Size m, aris::Size n, aris::Size rank, const double* U, UType u_t, const aris::Size* p, double* x, XType x_t, double* tau2, TauType2 t_t, double zero_check = 1e-10)noexcept->void
+{
+	// X 是 A 的 moore penrose 逆，为 n x m 维
+	//
+	// A 的qr分解:
+	// A_mn * P_nn = Q_mxm * R_mxn
+	// 若A的秩为r
+	// 此时R_mn 为：
+	//     1           r   r+1     n
+	// 1   [             .         ]
+	//     |    R1       .    R2   |
+	// r   |             .         |
+	//     |.......................|
+	// r+1 |             .         |
+	//     |             .         |
+	// m   [             .         ] 
+	// 
+	// A*P*x = b的最小范数的最小二乘解（linear least square:lls）为：
+	// 
+	// c = QT * b
+	// y = P * x
+	// 
+	// y的某一个特解为y_t：
+	// 1   [         ]
+	//     |  R1\c1  |
+	// r   |         |
+	//     |.........|
+	// r+1 |         |
+	//     |         |
+	// n   [    0    ]
+	// 
+	// y的通解为y_s：
+	//      1         n-r
+	// 1   [             ]
+	// r   |    R1\R2    |
+	//     | ............|
+	// r+1 | -1          |           
+	//     |    -1       |
+	//     |       ..    |
+	// n   [          -1 ]
+	// 
+	// 于是y的lls解中需求通解y_s的系数，它以下方程的最小二乘解：
+	// 
+	// y_s * k = y_t
+	// k =  y_s\(R1\c1) = y_s \ y_t
+	//
+	// 于是y的lls解为：
+	// y = y_t - y_s*(y_s \ y_t）=(I - y_s * y_s^-1) y_t
+	// x = P * y
+	//
+	// 若求广义逆，那么令b为mxm的单位阵，此时所求出x即为广义逆A+：
+	// 同时令QR分解矩阵为：
+	// A_mn * P_nn = Q_mxr * R_rxn
+	// 此时y_t：
+	//      1            m
+	// 1   [              ]
+	// r   |  R1\Q_mxr^T  |
+	//     |..............|
+	// r+1 |              |
+	// n   [    0         ]
+	//
+	// 而此时y_s可以进行qr分解：
+	// y_s = S_nxn * T_nxn-r
+	// 其中 T_nxn-r：
+	//     1     n-r               
+	//  1  [      |           
+	//     |  T1  |
+	// n-r |......|
+	//     |      |
+	//  n  [  T2  ]
+	// 这里T_nxn-r ^ -1为：
+	// 
+	//     1       n-r    n               
+	//  1  [        .     ]           
+	//     | T1^-1  .     |
+	// n-r [        .     ]
+	// 
+	// 于是 y_s * y_s ^ -1 为：
+	//   S * T * T^-1 *S^T
+	// = S(:,1:n-r) * S(:,1:n-r) ^ T
+	// 
+	// 而 I - y_s * y_s^-1 = S*S^T - S(:,1:n-r) * S(:,1:n-r) ^ T
+	//  = S(:,n-r+1:end) * S(:,n-r+1:end) ^ T
+	// 带入上式：
+	// y = S(:,n-r+1:end)_nxr * S(:,n-r+1:end)^T_rxn * y_t
+	//   = S(:,n-r+1:end)_nxr * S(1:r,n-r+1:end)^T_rxr * (R1\Q^T)_rxm
+	// 
+	// x = P^-1 * y;
+	// 
+	//
+
+
+	// step 1:
+	// change x to:
+	//     1           r         m
+	// 1   [                     ]
+	// r   |         R1\QT       |
+	//     |.....................|
+	// r+1 | (R1\R2)^T   .       |
+	// n   [             .       ] 
+	//
+	//
+	
+	s_fill(n, m, std::numeric_limits<double>::infinity(), x, x_t);
+
+	dsp(n, m, x, x_t);
+
+
+	// QT
+	s_householder_u2qmn(m, rank, U, u_t, x, T(x_t));
+
+	dsp(n, m, x, x_t);
+
+	// R1\QT
+	s_sov_um(rank, m, U, u_t, x + at(0, 0, x_t), x_t, x, x_t, zero_check);
+
+	dsp(n, m, x, x_t);
+
+	// R1\R2
+	s_sov_um(rank, n - rank, U, u_t, U + at(0, rank, u_t), u_t, x + at(rank, 0, x_t), T(x_t), zero_check);
+
+	dsp(n, m, x, x_t);
+
+	// step 2:
+	// 将通解矩阵做个行变换如下：
+	//
+	//     1           n-r
+	//  1  [ -1          ]
+	//     |    -1       |
+	//     |       ..    |
+	//     |          -1 |
+	// n-r | ............|
+	//     |    R1\R2    |
+	//  n  [             ]
+	//
+	// 其household变换产生的U（记作S）和tau有如下特征：
+	//     1           n-r         
+	//  1  [ *  *  *  * |
+	//     |    *  *  * |
+	//     |       *  * |
+	//     |          * |
+	// n-r |............|
+	//     | *  *  *  * |
+	//  n  [ *  *  *  * ]
+	//
+	//   1       n-r
+	// [ *  *  *  * ]
+	// 
+	// 这里将上述S的下三角部分储存在x中
+	//
+	// x变成:
+	//   1           r         m
+	// 1 [                     ]
+	//   |         R1\QT       |
+	// r |.....................|
+	//   |    S      .         |
+	// n [           .         ]
+	//
+	//
+	// make S and tau
+	for (Size i(-1), k0i{ at(0, rank, T(x_t)) }, ti{ 0 }; ++i < std::min({ n - rank, n, n - 1 }); k0i = next_c(k0i, T(x_t)), ti = next_r(ti, t_t)) {
+		double rho = std::sqrt(s_vv(rank, x + k0i, T(x_t), x + k0i, T(x_t)) + 1.0);
+
+		// Aii 为 -1.0
+		s_nv(rank, 1.0 / (-1.0 - rho), x + k0i, T(x_t));
+
+		double tau = (1.0 + s_vv(rank, x + k0i, T(x_t), x + k0i, T(x_t))) / 2;
+
+		for (Size j(i), kij{ next_c(k0i,T(x_t)) }; ++j < n - rank; kij = next_c(kij, T(x_t))) {
+			double k = (-1.0/tau) * (s_vv(rank, x + k0i, T(x_t), x + kij, T(x_t)));
+			s_va(rank, k, x + k0i, T(x_t), x + kij, T(x_t));
+		}
+
+		// step 3: 为减少循环，这里直接做乘法
+		// 利用S产生的QT来乘以R1\QT，S事实上为一个很大的矩阵，但其左下角很多为0，因此每一列只用做rank维的乘法
+		//
+		// x变成:
+		//   1           r         m
+		// 1 [                     ]
+		//   |     ST * (R1\QT)    |
+		// r |.....................|
+		//   |     S     .         |
+		// n [           .         ]
+		for (Size j(-1), x0j{ at(0, 0, x_t) }; ++j < m; x0j = next_c(x0j, x_t)) {
+			double alpha = (-1.0 / tau) * (s_vv(rank, x + k0i, T(x_t), x + x0j, x_t));
+			s_ma(rank, 1, alpha, x + k0i, T(x_t), x + x0j, x_t);
+		}
+	}
+
+	dsp(n, m, x, x_t);
+
+	// step 4:
+	// 利用S产生的Q来乘以ST（R1\QT），这里防止S被覆盖，因此局部会用tau(n-r+1:n)的内存来局部存储
+	//
+	// x变成:
+	//   1                     m
+	// 1 [                     ]
+	//   |                     |
+	//   |   S * ST * (R1\QT)  |
+	//   |                     |
+	// n [                     ]
+	std::cout << "-------------" << std::endl;
+	for (Size i(n - rank), k0i{ at(0, n - 1, T(x_t)) }, ti{ at(n - rank - 1, t_t) }; --i < n - rank; k0i = last_c(k0i, T(x_t)), ti = last_r(ti, t_t)) {
+		double tau = (1.0 + s_vv(rank, x + k0i, T(x_t), x + k0i, T(x_t))) / 2;
+
+		// 因为需要少占内存，因此先将
+		for (Size j(-1), x0j{ at(0, 0, x_t) }, tj{ at(n - rank,t_t) }; ++j < rank; x0j = next_c(x0j, x_t), tj = next_r(tj, t_t)) {
+			double alpha = (-1.0/tau) * (s_vv(rank, x + k0i, T(x_t), x + x0j, x_t));
+			s_ma(rank, 1, alpha, x + k0i, T(x_t), x + x0j, x_t);
+			tau2[tj] = alpha;
+		}
+
+		dsp(n, m, x, x_t);
+		for (Size j(rank - 1), x0j{ at(0, rank, x_t) }; ++j < m; x0j = next_c(x0j, x_t)) {
+			double alpha = (-1.0/tau) * (s_vv(rank, x + k0i, T(x_t), x + x0j, x_t));
+			s_ma(rank, 1, alpha, x + k0i, T(x_t), x + x0j, x_t);
+			x[at(i + rank, j, x_t)] = alpha;
+		}
+		dsp(n, m, x, x_t);
+
+
+		std::vector<double> newx(m, std::numeric_limits<double>::infinity());
+		dsp(1, m, newx.data());
+		
+		s_mm(rank, 1, rank, x, T(x_t), x + k0i, T(x_t), newx.data(), 1);
+
+		dsp(1, m, newx.data());
+
+		s_vc(rank, tau2 + at(n - rank, t_t), t_t, x + k0i, T(x_t));
+		std::cout << s_vv(rank, x + k0i, T(x_t), x + k0i, T(x_t)) << std::endl;
+		dsp(n, m, x, x_t);
+
+		
+
+
+
+		std::cout << "-------------" << std::endl;
+	}
+
+	// step 5:
+	// permutate
+	s_permutate_inv(n, m, p, x, x_t);
+}
+auto inline s_householder_up2pinv(aris::Size m, aris::Size n, aris::Size rank, const double* U, const aris::Size* p, double* x, double* tau2, double zero_check = 1e-10)noexcept->void { ::s_householder_up2pinv(m, n, rank, U, n, p, x, m, tau2, 1, zero_check); }
+
+
+
+
 void test_basic_operation()
 {
 	//test isEqual
@@ -835,13 +1100,13 @@ void test_householder(){
 
 
 
-		s_householder_up2pinv(m, n, rank, U_p, p, r1_, r2_);
+		::s_householder_up2pinv(m, n, rank, U_p, p, r1_, r2_);
 		if (!(s_is_equal(n, m, r1_, pinv, error)))std::cout << "\"s_householder_up2pinv\" failed" << std::endl;
 
 		s_mc(m, n, U_p, n, i1_, u_t);
 		s_mc(m, 1, tau_p, 1, i2_, tau_t);
 		s_mc(m, rhs, b, rhs, i3_, b_t);
-		s_householder_up2pinv(m, n, rank, i1_, u_t, p, r1_, pinv_t, r2_, 2);
+		::s_householder_up2pinv(m, n, rank, i1_, u_t, p, r1_, pinv_t, r2_, 2);
 		if (!(s_is_equal(n, m, r1_, pinv_t, pinv, m, error)))std::cout << "\"s_householder_up2pinv ld\" failed" << std::endl;
 
 
