@@ -1421,13 +1421,11 @@ namespace aris::dynamic{
 	}
 	auto inline s_householder_up_sov(Size m, Size n, Size rhs, Size rank, const double *U, const Size *p, const double *b, double *x, double zero_check = 1e-10)noexcept->void { s_householder_up_sov(m, n, rhs, rank, U, n, p, b, rhs, x, rhs, zero_check); }
 	
-	// tbd ....
 	//    U :        m x n
 	//    p : max(m,n) x 1
 	//    x :        n x m
-	// tau2 : max(n,m) x 1
 	template<typename UType, typename XType, typename TauType2>
-	auto inline s_householder_up2pinv(Size m, Size n, Size rank, const double *U, UType u_t, const Size *p, double *x, XType x_t, double *tau2, TauType2 t_t, double zero_check = 1e-10)noexcept->void
+	auto inline s_householder_up2pinv(aris::Size m, aris::Size n, aris::Size rank, const double* U, UType u_t, const aris::Size* p, double* x, XType x_t, double* tau2, TauType2 t_t, double zero_check = 1e-10)noexcept->void
 	{
 		// X 是 A 的 moore penrose 逆，为 n x m 维
 		//
@@ -1532,8 +1530,10 @@ namespace aris::dynamic{
 
 		// QT
 		s_householder_u2qmn(m, rank, U, u_t, x, T(x_t));
+
 		// R1\QT
 		s_sov_um(rank, m, U, u_t, x + at(0, 0, x_t), x_t, x, x_t, zero_check);
+
 		// R1\R2
 		s_sov_um(rank, n - rank, U, u_t, U + at(0, rank, u_t), u_t, x + at(rank, 0, x_t), T(x_t), zero_check);
 
@@ -1573,20 +1573,17 @@ namespace aris::dynamic{
 		// n [           .         ]
 		//
 		//
-		// make S and tau	
-		for (Size i(-1), k0i{ at(0, rank, T(x_t)) }, ti{ 0 }; ++i < std::min({ n - rank, n, n - 1 }); k0i = next_c(k0i, T(x_t)), ti = next_r(ti, t_t)){
+		// make S and tau
+		for (Size i(-1), k0i{ at(0, rank, T(x_t)) }, ti{ 0 }; ++i < std::min({ n - rank, n, n - 1 }); k0i = next_c(k0i, T(x_t)), ti = next_r(ti, t_t)) {
 			double rho = std::sqrt(s_vv(rank, x + k0i, T(x_t), x + k0i, T(x_t)) + 1.0);
 
 			// Aii 为 -1.0
 			s_nv(rank, 1.0 / (-1.0 - rho), x + k0i, T(x_t));
-			tau2[ti] = -1.0 / rho - 1.0;
 
-			//auto ratio = (-1.0 / rho - 1.0) * ;
+			double tau = (1.0 + s_vv(rank, x + k0i, T(x_t), x + k0i, T(x_t))) / 2;
 
-
-
-			for (Size j(i), kij{ next_c(k0i,T(x_t)) }; ++j < n - rank; kij = next_c(kij, T(x_t))){
-				double k = tau2[ti] * (s_vv(rank, x + k0i, T(x_t), x + kij, T(x_t)));
+			for (Size j(i), kij{ next_c(k0i,T(x_t)) }; ++j < n - rank; kij = next_c(kij, T(x_t))) {
+				double k = (-1.0 / tau) * (s_vv(rank, x + k0i, T(x_t), x + kij, T(x_t)));
 				s_va(rank, k, x + k0i, T(x_t), x + kij, T(x_t));
 			}
 
@@ -1599,15 +1596,13 @@ namespace aris::dynamic{
 			//   |     ST * (R1\QT)    |
 			// r |.....................|
 			//   |     S     .         |
-			// n [           .         ]  
+			// n [           .         ]
 			for (Size j(-1), x0j{ at(0, 0, x_t) }; ++j < m; x0j = next_c(x0j, x_t)) {
-				double alpha = tau2[ti] * (s_vv(rank, x + k0i, T(x_t), x + x0j, x_t));
+				double alpha = (-1.0 / tau) * (s_vv(rank, x + k0i, T(x_t), x + x0j, x_t));
 				s_ma(rank, 1, alpha, x + k0i, T(x_t), x + x0j, x_t);
 			}
 		}
 
-		dsp(n, m, x, x_t);
-		
 		// step 4:
 		// 利用S产生的Q来乘以ST（R1\QT），这里防止S被覆盖，因此局部会用tau(n-r+1:n)的内存来局部存储
 		//
@@ -1618,41 +1613,51 @@ namespace aris::dynamic{
 		//   |   S * ST * (R1\QT)  |
 		//   |                     |
 		// n [                     ]
-		std::cout << "-------------" << std::endl;
-		for (Size i(n - rank), k0i{ at(0, n - 1, T(x_t)) }, ti{ at(n - rank - 1, t_t) }; --i < n - rank; k0i = last_c(k0i, T(x_t)), ti = last_r(ti, t_t)){
-			//double rho = std::sqrt(s_vv(rank, x + k0i, T(x_t), x + k0i, T(x_t)) + 1.0);
+		for (Size i(n - rank), k0i{ at(0, n - 1, T(x_t)) }, ti{ at(n - rank - 1, t_t) }; --i < n - rank; k0i = last_c(k0i, T(x_t)), ti = last_r(ti, t_t)) {
+			double tau = (1.0 + s_vv(rank, x + k0i, T(x_t), x + k0i, T(x_t))) / 2;
 
-			//// Aii 为 -1.0
-			//s_nv(rank, 1.0 / (-1.0 - rho), x + k0i, T(x_t));
-			//tau2[ti] = -1.0 / rho - 1.0;
-			//double tau = 
-			
-			// 因为需要少占内存，因此先将
-			for (Size j(-1), x0j{ at(0, 0, x_t) }, tj{ at(n - rank,t_t) }; ++j < rank; x0j = next_c(x0j, x_t), tj = next_r(tj, t_t)){
-				double alpha = tau2[ti] * (s_vv(rank, x + k0i, T(x_t), x + x0j, x_t));
-				s_ma(rank, 1, alpha, x + k0i, T(x_t), x + x0j, x_t);
-				tau2[tj] = alpha;
-			}
-
-			dsp(n, m, x, x_t);
-			for (Size j(rank - 1), x0j{ at(0, rank, x_t) }; ++j < m; x0j = next_c(x0j, x_t)){
-				double alpha = tau2[ti] * (s_vv(rank, x + k0i, T(x_t), x + x0j, x_t));
+			for (Size j(rank - 1), x0j{ at(0, rank, x_t) }; ++j < m; x0j = next_c(x0j, x_t)) {
+				double alpha = (-1.0 / tau) * (s_vv(rank, x + k0i, T(x_t), x + x0j, x_t));
 				s_ma(rank, 1, alpha, x + k0i, T(x_t), x + x0j, x_t);
 				x[at(i + rank, j, x_t)] = alpha;
 			}
-			dsp(n, m, x, x_t);
-			s_vc(rank, tau2 + at(n - rank, t_t), t_t, x + k0i, T(x_t));
 
-			dsp(n, m, x, x_t);
+			// 使用递归来降低内存分配 //
+			const auto& iter_func = [](auto&& self, Size m, Size n, Size i, Size j, Size x0j, Size k0i, Size rank, double tau, double* x, auto x_t)->void {
+				if (j >= rank)return;
 
-			std::cout << "-------------" << std::endl;
+				const Size MEM_SIZE = 128;
+
+				double mem[MEM_SIZE];
+				Size real_size = std::min(Size(MEM_SIZE), rank - j);
+				for (Size k = 0; k < real_size; ++k) {
+					mem[k] = (-1.0 / tau) * (s_vv(rank, x + k0i, T(x_t), x + x0j, x_t));
+					s_ma(rank, 1, mem[k], x + k0i, T(x_t), x + x0j, x_t);
+					x0j = next_c(x0j, x_t);
+				}
+				self(self, m, n, i, j + real_size, x0j, k0i, rank, tau, x, x_t);
+				for (Size k = 0; k < real_size; ++k) {
+					x[at(j + k, i + rank, T(x_t))] = mem[k];
+				}
+
+				return;
+				};
+			iter_func(iter_func, m, n, i, 0, 0, k0i, rank, tau, x, x_t);
+
+			//for (Size j(-1), x0j{ at(0, 0, x_t) }, tj{ at(n - rank,t_t) }; ++j < rank; x0j = next_c(x0j, x_t), tj = next_r(tj, t_t)) {
+			//	double alpha = (-1.0/tau) * (s_vv(rank, x + k0i, T(x_t), x + x0j, x_t));
+			//	s_ma(rank, 1, alpha, x + k0i, T(x_t), x + x0j, x_t);
+			//	tau2[tj] = alpha;
+			//}
+			//s_vc(rank, tau2 + at(n - rank, t_t), t_t, x + k0i, T(x_t));
 		}
 
 		// step 5:
 		// permutate
 		s_permutate_inv(n, m, p, x, x_t);
 	}
-	auto inline s_householder_up2pinv(Size m, Size n, Size rank, const double *U, const Size *p, double *x, double *tau2, double zero_check = 1e-10)noexcept->void { s_householder_up2pinv(m, n, rank, U, n, p, x, m, tau2, 1, zero_check); }
+	auto inline s_householder_up2pinv(aris::Size m, aris::Size n, aris::Size rank, const double* U, const aris::Size* p, double* x, double* tau2, double zero_check = 1e-10)noexcept->void { s_householder_up2pinv(m, n, rank, U, n, p, x, m, tau2, 1, zero_check); }
+
 
 	//#define ARIS_DEBUG_DYNAMIC_SVD
 	// A = U * S * V^T
