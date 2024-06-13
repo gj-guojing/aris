@@ -81,7 +81,9 @@ namespace aris::dynamic
 	//    .   |/
 	//   ---  *----> x
 	//       O
-	auto inverseUr(const UrParamLocal &param, const double*ee_pm, int which_root, double*input)->int {
+	auto inverseUr(const void *para, const double*ee_pm, const double *current_input, int which_root, double*input)->int {
+		auto& param = *reinterpret_cast<const UrParamLocal*>(para);
+		
 		const double &L1 = param.L1;
 		const double &L2 = param.L2;
 		const double &W1 = param.W1;
@@ -475,11 +477,7 @@ namespace aris::dynamic
 		for (int i = 0; i < 6; ++i)
 			current_input_pos[i] = model()->motionPool()[i].mpInternal();
 
-		auto ik = [this](const double* ee_pos, int which_root, double* input)->int {
-			return inverseUr(this->imp_->puma_param, ee_pos, which_root, input);
-		};
-
-		return s_ik(6, rootNumber(), ik, which_root, ee_pos, input, root_mem, input_period, current_input_pos);
+		return s_ik(6, rootNumber(), &imp_->puma_param, inverseUr, which_root, ee_pos, input, root_mem, input_period, current_input_pos);
 
 	}
 	UrInverseKinematicSolver::~UrInverseKinematicSolver() = default;

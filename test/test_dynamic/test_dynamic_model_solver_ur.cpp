@@ -338,6 +338,6 @@ void test_model_solver_ur()
 	//dynamic_cast<aris::dynamic::GeneralMotion&>(m1->generalMotionPool().at(0)).setMpe(std::array<double, 6>{0.38453, 0, 0.6294, 0.0001, 0 + aris::PI/2, 0}.data(), "321");
 	//m1->solverPool().at(0).kinPos();
 
-	std::cout << "-----------------test model solver puma finished------------" << std::endl << std::endl;
+	std::cout << "-----------------test model solver ur finished------------" << std::endl << std::endl;
 }
 

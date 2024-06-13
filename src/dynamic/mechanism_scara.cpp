@@ -31,7 +31,9 @@ namespace aris::dynamic{
 		double mp_factor[4];
 	};
 	// 不考虑 pitch //
-	auto scaraInverse(const ScaraParamLocal &param, const double* ee_xyza, int which_root, double* input)->int {
+	auto scaraInverse(const void* para, const double* ee_xyza, const double* current_input, int which_root, double* input)->int {
+		auto &param = *reinterpret_cast<const ScaraParamLocal*>(para);
+		
 		const double& a = param.a;
 		const double& b = param.b;
 
@@ -329,12 +331,7 @@ namespace aris::dynamic{
 		for (int i = 0; i < 4; ++i)
 			current_input_pos[i] = model()->motionPool()[i].mpInternal();
 
-		auto ik = [this](const double* ee_pos, int which_root, double* input)->int {
-			return scaraInverse(imp_->scara_param, ee_pos, which_root, input);
-		};
-
-		return s_ik(4, rootNumber(), ik, which_root, output, input, root_mem, input_period, current_input_pos);
-
+		return s_ik(4, rootNumber(), &imp_->scara_param, scaraInverse, which_root, output, input, root_mem, input_period, current_input_pos);
 	}
 	ScaraInverseKinematicSolver::~ScaraInverseKinematicSolver() = default;
 	ScaraInverseKinematicSolver::ScaraInverseKinematicSolver() :InverseKinematicSolver(1, 0.0), imp_(new Imp) {

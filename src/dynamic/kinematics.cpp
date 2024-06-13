@@ -315,13 +315,12 @@ namespace aris::dynamic{
 		return 0;
 	}
 
-
-	auto s_ik(int root_size, int root_num, IkFunc func, int which_root, const double* ee_pos, double* input_pos, double* roots_mem, const double* root_periods, const double* current_root) -> int {
+	auto s_ik(int root_size, int root_num, const void* dh, IkFunc2 func, int which_root, const double* ee_pos, double* input_pos, double* roots_mem, const double* root_periods, const double* current_root) -> int {
 		if (which_root >= root_num || which_root < 0) {
 			int solution_num = 0;
 			double max_diff_norm = std::numeric_limits<double>::infinity();
 			for (int i = 0; i < root_num; ++i) {
-				if (func(ee_pos, i, roots_mem) >= 0) {
+				if (func(dh, ee_pos, current_root, i, roots_mem) >= 0) {
 					// 采用 无穷 范数来比较两组向量，即只看差值最大的那一个数据
 					double this_norm = 0;
 					for (int j = 0; j < root_size; ++j) {
@@ -344,7 +343,7 @@ namespace aris::dynamic{
 			return solution_num > 0 ? 0: -1;
 		}
 		else {
-			if (func(ee_pos, which_root, input_pos) >= 0) {
+			if (func(dh, ee_pos, current_root, which_root, input_pos) >= 0) {
 				// 贴近当前根
 				for (int j = 0; j < root_size; ++j) {
 					if (root_periods && current_root && std::isfinite(root_periods[j]) && std::isfinite(current_root[j]))

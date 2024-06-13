@@ -77,8 +77,13 @@ namespace aris::dynamic{
 		// 驱动在零位处的偏移，以及系数，这里主要考虑可能建模时，其零位和系统零位不一致
 		double mp_offset[6];// mp_real = (mp_theoretical - mp_offset) * mp_factor
 		double mp_factor[6];
+
+		double zero_check_{ 1e-10 };
 	};
-	auto pumaInverse(const PumaParamLocal& param, const double* ee_pm, int which_root, const double *current_input, double* input, double zero_check = 1e-10)->int {
+	auto pumaInverse(const void* para, const double* ee_pm, const double* current_input, int which_root, double* input)->int {
+		auto& param = *reinterpret_cast<const PumaParamLocal*>(para);
+		
+		
 		const double& d1 = param.d1;
 		const double& d2 = param.d2;
 		const double& d3 = param.d3;
@@ -90,6 +95,8 @@ namespace aris::dynamic{
 
 		const double* offset = param.mp_offset;
 		const double* factor = param.mp_factor;
+
+		const double zero_check = param.zero_check_;
 
 		double q[6]{ 0 }, current_q[6];
 
@@ -474,11 +481,7 @@ namespace aris::dynamic{
 		for (int i = 0; i < 6; ++i)
 			current_input_pos[i] = model()->motionPool()[i].mpInternal();
 
-		auto ik = [this, current_input_pos](const double* ee_pos, int which_root, double* input)->int {
-			return pumaInverse(this->imp_->puma_param, ee_pos, which_root, current_input_pos, input);
-		};
-
-		return s_ik(6, rootNumber(), ik, which_root, ee_pos, input, root_mem, input_period, current_input_pos);
+		return s_ik(6, rootNumber(), &imp_->puma_param, pumaInverse, which_root, ee_pos, input, root_mem, input_period, current_input_pos);
 	}
 	PumaInverseKinematicSolver::~PumaInverseKinematicSolver() = default;
 	PumaInverseKinematicSolver::PumaInverseKinematicSolver() :InverseKinematicSolver(1, 0.0), imp_(new Imp) {

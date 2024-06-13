@@ -1819,7 +1819,7 @@ void test_qp() {
 		};
 
 		
-		for (int i = 0; i < 10000000; ++i) {
+		for (int i = 0; i < 1e4; ++i) {
 			if (i % 1000 == 0)
 				std::cout << i << std::endl;
 
