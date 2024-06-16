@@ -155,7 +155,8 @@ namespace aris::dynamic {
 		auto mpInternal()const noexcept->double;
 		auto setMpInternal(double mp_internal)noexcept->void;
 
-
+		auto mp2mpInternal(double mp)const noexcept->double;
+		auto mpInternal2mp(double mp)const noexcept->double;
 
 		virtual ~Motion();
 		explicit Motion(const std::string &name = "motion", Marker *makI = nullptr, Marker *makJ = nullptr

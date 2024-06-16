@@ -169,8 +169,6 @@ if(UNIX)
 	set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 elseif(WIN32)
 	
-	
-
 endif()
 
 

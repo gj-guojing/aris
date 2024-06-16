@@ -236,8 +236,14 @@ namespace aris::dynamic{
 	auto Motion::setMpOffset(double mp_offset)noexcept->void { imp_->mp_offset_ = mp_offset; }
 	auto Motion::mpFactor()const noexcept->double { return imp_->mp_factor_; }
 	auto Motion::setMpFactor(double mp_factor)noexcept->void { imp_->mp_factor_ = mp_factor; }
-	auto Motion::mpInternal()const noexcept->double { return (imp_->mp_ + imp_->mp_offset_) * imp_->mp_factor_; }
-	auto Motion::setMpInternal(double mp_internal)noexcept->void { imp_->mp_ = mp_internal / imp_->mp_factor_ - imp_->mp_offset_; }
+	auto Motion::mpInternal()const noexcept->double { return mp2mpInternal(imp_->mp_); }
+	auto Motion::setMpInternal(double mp_internal)noexcept->void { imp_->mp_ = mpInternal2mp(mp_internal); }
+	auto Motion::mp2mpInternal(double mp)const noexcept->double {
+		return (mp + imp_->mp_offset_) * imp_->mp_factor_;
+	}
+	auto Motion::mpInternal2mp(double mp_internal)const noexcept->double {
+		return mp_internal / imp_->mp_factor_ - imp_->mp_offset_;
+	}
 	Motion::~Motion() = default;
 	Motion::Motion(const std::string &name, Marker* makI, Marker* makJ, Size component_axis, const double *frc_coe, double mp_offset
 		, double mp_factor, bool active) : MotionBase(name, makI, makJ, active)

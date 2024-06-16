@@ -2,6 +2,7 @@
 #include <iostream>
 #include <array>
 #include <aris/dynamic/dynamic.hpp>
+#include <aris/core/core.hpp>
 
 #include<type_traits>
 
@@ -238,16 +239,186 @@ void test_ur_vel() {
 	s_mma(6, 1, 6, fwd.Jf(), input_acc, result);
 	if (!s_is_equal(6, result, output_as, 1e-9))std::cout << "failed" << std::endl;
 }
+void test_ur_calib_dh() {
+	UrParam param;
+	param.H1 = 0.089159;
+	param.W1 = 0.13585 - 0.1197 + 0.093;
+	param.L1 = 0.425;
+	param.L2 = 0.39225;
+	param.H2 = -0.09465;
+	param.W2 = 0.0823;
+	auto m = aris::dynamic::createModelUr(param);
+	dynamic_cast<aris::dynamic::GeneralMotion&>(m->generalMotionPool()[0]).setPoseType(aris::dynamic::GeneralMotion::PoseType::EULER123);
+
+	// make joint data //
+	const int n = 10;
+	double joint_pos_seen[n][6]{
+		{0.1,0.2,0.1,0.1,0.2,0.3},
+		{0.2,0.4,-0.3,0.5,0.2,0.3},
+		{0.3,0.6,0.3,0.8,0.2,0.3},
+		{0.3,0.8,-0.3,0.1,0.2,0.3},
+		{0.2,0.9,0.3,0.1,0.5,0.3},
+		{0.1,0.9,-0.3,0.1,0.8,0.3},
+		{0.1,0.8,0.3,0.1,0.2,0.3},
+		{0.2,0.7,-0.3,0.1,0.2,0.6},
+		{0.3,0.6,0.3,0.1,0.2,0.9},
+	};
+
+	// make 视觉数据 //
+	double pq_obj_in_eye[n][7];
+	{
+		// eye in tool //
+		const double pe_eye_in_tool[6]{ 0.1,0.2,0.3,0.111,0.221,0.832 };
+		double pq_eye_in_tool[7];
+		s_pe2pq(pe_eye_in_tool, pq_eye_in_tool, "321");
+
+		// obj in base //
+		const double pe_obj_in_base[6]{ 1.23,2.2,4.3,0.511,0.321,0.932 };
+		double pq_obj_in_base[7];
+		s_pe2pq(pe_obj_in_base, pq_obj_in_base, "321");
+
+		// joint error //
+		double joint_error[6]{ 0.01,0.03,0.015,0.02,0.001,-0.02 };
+		//double joint_error[6]{ 0,0,0,0,0,0 };
+
+		// make data
+		double pe_tool_in_base[n][6];
+		
+		// make joint data //
+		for (int i = 0; i < n; ++i) {
+			double joint_pos_real[6];
+			s_vc(6, joint_pos_seen[i], joint_pos_real);
+			s_va(6, joint_error, joint_pos_real);
+
+			if (m->forwardKinematics(joint_pos_real, pe_tool_in_base[i], 0))
+				std::cout << "failed" << std::endl;
+		}
+
+		double pq_tool_in_base[n][7];
+		// make eye data //
+		for (int i = 0; i < n; ++i) {
+			s_pe2pq(pe_tool_in_base[i], pq_tool_in_base[i], "123");
+			
+			double pq_eye_in_base[7];
+			s_pq_dot_pq(pq_tool_in_base[i], pq_eye_in_tool, pq_eye_in_base);
+
+			double pm_eye_in_base[16];
+			s_pq2pm(pq_eye_in_base, pm_eye_in_base);
+
+			s_inv_pq2pq(pm_eye_in_base, pq_obj_in_base, pq_obj_in_eye[i]);
+		}
+	}
+
+	aris::dynamic::Model local_m1;
+	aris::core::fromJsonString(local_m1, aris::core::toJsonString(*m));
+	local_m1.init();
+
+	aris::dynamic::Model local_m2;
+	aris::core::fromJsonString(local_m2, aris::core::toJsonString(*m));
+	local_m2.init();
+
+	aris::dynamic::Model* m1 = &local_m1;
+	aris::dynamic::Model* m2 = &local_m2;
+
+
+	//double mp_offset[6];
+	//for (int i = 0; i < 6; ++i) {
+	//	mp_offset[i] = m1->motionPool()[i].mpOffset();
+	//}
+
+	double mp_offset[6]{ 0.01,0.03,0.015,0.02,0.001,-0.02 };
+	//double mp_offset[6]{ -0.01,-0.03,-0.015,-0.02,-0.001,0.02 };
+
+	auto cost_func = [m1, n, joint_pos_seen, pq_obj_in_eye](const double* p, const double* x, double* r)->int {
+		for (int i = 0; i < 6; ++i) {
+			m1->motionPool()[i].setMpOffset(p[i]);
+		}
+		m1->init();
+
+		// pq_tool_in_base that been seen //
+		std::vector<double> pq_tool_in_base(n*7);
+		for (int i = 0; i < n; ++i) {
+			double pe_tool_in_base_seen[6];
+			m1->setInputPos(joint_pos_seen[i]);
+			m1->forwardKinematics();
+			m1->getOutputPos(pe_tool_in_base_seen);
+
+			//if (m1->forwardKinematics(joint_pos_seen[i], pe_tool_in_base_seen, 0))
+			//	std::cout << "failed" << std::endl;
+
+			s_pe2pq(pe_tool_in_base_seen, pq_tool_in_base.data() + i*7, "123");
+		}
+
+		// calib eye in hand //
+		double pq_eye_in_tool[7];
+		std::vector<double> mem(16 * n * n);
+		s_eye_in_hand_calib(n, *pq_obj_in_eye, pq_tool_in_base.data(), pq_eye_in_tool, mem.data());
+
+		// compute obj in base & its avg err //
+		std::vector<double> pq_obj_in_base(n * 7);
+
+		//double pq_obj_in_base[n][7];
+		for (int i = 0; i < n; ++i) {
+			s_pose_dot_pose(pq_tool_in_base.data() + i*7, "pq", pq_eye_in_tool, "pq", pq_obj_in_eye[i], "pq", pq_obj_in_base.data() + i * 7, "pq");
+		}
+
+
+		double pq_obj_in_base_avg[7]{};
+
+		dsp(n, 7, pq_obj_in_base.data());
+
+		s_vc(4, pq_obj_in_base.data() + 3, pq_obj_in_base_avg + 3);
+		for (int i = 0; i < n; ++i) {
+			if (s_vv(4, pq_obj_in_base.data() + i * 7 + 3, pq_obj_in_base_avg + 3) < 0)
+				s_vs(4, pq_obj_in_base.data() + i * 7 + 3, pq_obj_in_base_avg + 3);
+			else
+				s_va(4, pq_obj_in_base.data() + i * 7 + 3, pq_obj_in_base_avg + 3);
+		}
+		s_nv(4, 1.0 / s_norm(4, pq_obj_in_base_avg + 3), pq_obj_in_base_avg + 3);
+
+		dsp(1, 7, pq_obj_in_base_avg);
+
+		std::vector<double> errs(n);
+		for (int i = 0; i < n; ++i) {
+			errs[i] = std::acos(std::min(s_vv(4, pq_obj_in_base_avg + 3, pq_obj_in_base.data() + i * 7 + 3), 1.0));
+		}
+
+		double max_err = *std::max_element(errs.data(), errs.data() + n);
+		double err_norm = s_norm(n, errs.data());
+
+		std::cout << "err_norm:" << err_norm << std::endl;
+
+		r[0] = err_norm;
+
+
+		return 0;
+	};
+
+	double mp_offset_result[6];
+
+	OptimizationParam op{
+		1,1,1,6,
+		cost_func,
+		nullptr,
+		mp_offset,
+		mp_offset_result
+	};
+
+	s_optimize(op);
+
+	dsp(1, 6, op.param);
+}
+
 
 void test_model_solver_ur()
 {
 	std::cout << std::endl << "-----------------test model solver ur-----------------------" << std::endl;
 
 
-
-	test_ur_forward_solver();
-	test_ur_inverse_solver();
-	test_ur_vel();
+	test_ur_calib_dh();
+	//test_ur_forward_solver();
+	//test_ur_inverse_solver();
+	//test_ur_vel();
 
 	//auto m = createUrModel(j_pos, j_axis, pe_ee_i, pe_ee_j);
 

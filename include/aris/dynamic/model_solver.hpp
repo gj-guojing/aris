@@ -86,6 +86,8 @@ namespace aris::dynamic
 		auto virtual kinVel()->int override;
 		auto virtual dynAccAndFce()->int override;
 
+		auto virtual kinPosPure(const double* motion_pos, double* answer, int which_root)->int override;
+
 		auto cptJacobi()noexcept->void;
 		auto mJf()const noexcept->Size;// equal mot num
 		auto nJf()const noexcept->Size;// equal ee num * 6
@@ -106,6 +108,8 @@ namespace aris::dynamic
 		auto virtual kinPos()->int override;
 		auto virtual kinVel()->int override;
 		auto virtual dynAccAndFce()->int override;
+
+		auto virtual kinPosPure(const double* motion_pos, double* answer, int which_root)->int override;
 
 		auto cptJacobi()noexcept->void;
 		auto mJi()const noexcept->Size;// equal mot num
