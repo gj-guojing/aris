@@ -158,7 +158,7 @@ namespace aris::dynamic{
 		}
 
 		// mp
-		*p = mp_internal / imp_->mp_factor_ - imp_->mp_offset_;
+		*p = mpInternal2mp(mp_internal);
 		
 	}
 	auto Motion::cptPmFromP(const double* p, double* pm_i2j)const noexcept->void {

@@ -13,10 +13,11 @@
 
 #include "aris/dynamic/model.hpp"
 #include "aris/dynamic/mechanism_ur.hpp"
+#include "aris/dynamic/math_optimization.hpp"
 #include "aris/core/reflection.hpp"
 
-namespace aris::dynamic
-{
+namespace aris::dynamic{
+
 	struct UrParamLocal {
 		// UR的机构有如下特点：
 		// 1轴和2轴垂直且交于一点： A点
@@ -599,6 +600,135 @@ namespace aris::dynamic
 
 		return model;
 	}
+
+
+	auto ARIS_API calibUrParamBy3DEye(CalibUrParam& param)->int {
+		auto n = param.n;
+		auto joint_pos_seen = param.joint_pos;
+		auto pq_obj_in_eye = param.pq_obj_in_eye;
+
+		double pq_eye_in_tool[7];
+		auto cost_func = [param, n, joint_pos_seen, pq_obj_in_eye, &pq_eye_in_tool](const double* p, const double* x, double* r)->int {
+			UrParam ur_param;
+			ur_param.H1 = param.dh_init[0];
+			ur_param.W1 = p[4];
+			ur_param.L1 = p[5];
+			ur_param.L2 = p[6];
+			ur_param.H2 = p[7];
+			ur_param.W2 = param.dh_init[5];
+			auto local_m1 = aris::dynamic::createModelUr(ur_param);
+			dynamic_cast<aris::dynamic::GeneralMotion&>(local_m1->generalMotionPool()[0]).setPoseType(aris::dynamic::GeneralMotion::PoseType::QUATERNION);
+			
+			aris::dynamic::Model* m1 = local_m1.get();
+
+			m1->motionPool()[1].setMpOffset(p[0]);
+			m1->motionPool()[2].setMpOffset(p[1]);
+			m1->motionPool()[3].setMpOffset(p[2]);
+			m1->motionPool()[4].setMpOffset(p[3]);
+			m1->init();
+
+			// pq_tool_in_base that been seen //
+			std::vector<double> pq_tool_in_base(n * 7);
+			for (int i = 0; i < n; ++i) {
+				m1->forwardKinematics(joint_pos_seen + i * 6, pq_tool_in_base.data() + i * 7, 0);
+			}
+
+			// calib eye in hand //
+			std::vector<double> mem(16 * n * n);
+			s_eye_in_hand_calib(n, pq_obj_in_eye, pq_tool_in_base.data(), pq_eye_in_tool, mem.data());
+
+			// compute obj in base at each point //
+			std::vector<double> pq_obj_in_base(n * 7);
+			for (int i = 0; i < n; ++i) {
+				s_pq_dot_pq(pq_tool_in_base.data() + i * 7, pq_eye_in_tool, pq_obj_in_eye + i*7, pq_obj_in_base.data() + i * 7);
+			}
+
+			// compute obj in base avg
+			double pq_obj_in_base_avg[7]{};
+			s_vc(4, pq_obj_in_base.data() + 3, pq_obj_in_base_avg + 3);
+			for (int i = 0; i < n; ++i) {
+				s_va(3, pq_obj_in_base.data() + i * 7, pq_obj_in_base_avg);
+
+				if (s_vv(4, pq_obj_in_base.data() + i * 7 + 3, pq_obj_in_base_avg + 3) < 0)
+					s_vs(4, pq_obj_in_base.data() + i * 7 + 3, pq_obj_in_base_avg + 3);
+				else
+					s_va(4, pq_obj_in_base.data() + i * 7 + 3, pq_obj_in_base_avg + 3);
+			}
+			s_nv(4, 1.0 / s_norm(4, pq_obj_in_base_avg + 3), pq_obj_in_base_avg + 3);
+			s_nv(3, 1.0 / n, pq_obj_in_base_avg);
+
+			// update residuals //
+			for (int i = 0; i < n; ++i) {
+				r[i * 7 + 0] = pq_obj_in_base_avg[0] - pq_obj_in_base[i * 7 + 0];
+				r[i * 7 + 1] = pq_obj_in_base_avg[1] - pq_obj_in_base[i * 7 + 1];
+				r[i * 7 + 2] = pq_obj_in_base_avg[2] - pq_obj_in_base[i * 7 + 2];
+
+				if (s_vv(4, pq_obj_in_base.data() + i * 7 + 3, pq_obj_in_base_avg + 3) < 0.0) {
+					r[i * 7 + 3] = pq_obj_in_base_avg[3] + pq_obj_in_base[i * 7 + 3];
+					r[i * 7 + 4] = pq_obj_in_base_avg[4] + pq_obj_in_base[i * 7 + 4];
+					r[i * 7 + 5] = pq_obj_in_base_avg[5] + pq_obj_in_base[i * 7 + 5];
+					r[i * 7 + 6] = pq_obj_in_base_avg[6] + pq_obj_in_base[i * 7 + 6];
+				}
+				else {
+					r[i * 7 + 3] = pq_obj_in_base_avg[3] - pq_obj_in_base[i * 7 + 3];
+					r[i * 7 + 4] = pq_obj_in_base_avg[4] - pq_obj_in_base[i * 7 + 4];
+					r[i * 7 + 5] = pq_obj_in_base_avg[5] - pq_obj_in_base[i * 7 + 5];
+					r[i * 7 + 6] = pq_obj_in_base_avg[6] - pq_obj_in_base[i * 7 + 6];
+				}
+			}
+
+			return 0;
+		};
+
+		double param_init[8]{ 
+			param.mp_offset_init[1], param.mp_offset_init[2], param.mp_offset_init[3], param.mp_offset_init[4],
+			param.dh_init[1],param.dh_init[2],param.dh_init[3],param.dh_init[4],
+		};
+
+		double param_result[8];
+
+		OptimizationParam op{
+			1,0,7 * n,8,
+			cost_func,
+			nullptr,
+			param_init,
+			param_result
+		};
+
+		s_optimize(op);
+
+		param.mp_offset_result[0] = param.mp_offset_init[0];
+		param.mp_offset_result[1] = op.param[0];
+		param.mp_offset_result[2] = op.param[1];
+		param.mp_offset_result[3] = op.param[2];
+		param.mp_offset_result[4] = op.param[3];
+		param.mp_offset_result[5] = param.mp_offset_init[5];
+
+		param.dh_result[0] = param.dh_init[0];
+		param.dh_result[1] = op.param[4];
+		param.dh_result[2] = op.param[5];
+		param.dh_result[3] = op.param[6];
+		param.dh_result[4] = op.param[7];
+		param.dh_result[5] = param.dh_init[5];
+
+		std::vector<double> residuals(param.n * 7);
+		cost_func(op.param, nullptr, residuals.data());
+
+		s_vc(7, pq_eye_in_tool, param.eye_pq);
+		param.avg_obj_pos_err = 0.0;
+		param.avg_obj_quad_err = 0.0;
+		for (int i = 0; i < n; ++i) {
+			param.avg_obj_pos_err += s_norm(3, residuals.data() + i * 7);
+			param.avg_obj_quad_err += s_norm(4, residuals.data() + i * 7 + 3);
+		}
+		
+		param.avg_obj_pos_err /= n;
+		param.avg_obj_quad_err /= n;
+
+
+		return 0;
+	}
+
 
 	ARIS_REGISTRATION{
 		aris::core::class_<UrInverseKinematicSolver>("UrInverseKinematicSolver")

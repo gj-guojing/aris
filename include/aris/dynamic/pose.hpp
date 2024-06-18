@@ -134,6 +134,32 @@ namespace aris::dynamic{
 	auto ARIS_API s_pq_dot_v3(const double* pq, const double* v3_in, double* v3_out) noexcept->double*;
 	auto ARIS_API s_inv_pq_dot_v3(const double* pq, const double* v1, double* v2)noexcept->double*;
 
+	template <typename ...Args>
+	auto s_pq_dot_pq(const double* pq1, const double* pq2, Args ...args) noexcept->double* {
+		double pq[7];
+		s_pq_dot_pq(pq1, pq2, pq);
+		return s_pq_dot_pq(pq, args...);
+	}
+	//template <typename V3Type1, typename V3Type2>
+	//auto s_pq_dot_v3(const double* pm, const double* v3_in, V3Type1 v31_t, double* v3_out, V3Type2 v32_t) noexcept->void {
+	//	const Size a0{ 0 }, a1{ next_r(a0, v31_t) }, a2{ next_r(a1, v31_t) };
+	//	const Size b0{ 0 }, b1{ next_r(b0, v32_t) }, b2{ next_r(b1, v32_t) };
+
+	//	v3_out[b0] = pm[0] * v3_in[a0] + pm[1] * v3_in[a1] + pm[2] * v3_in[a2];
+	//	v3_out[b1] = pm[4] * v3_in[a0] + pm[5] * v3_in[a1] + pm[6] * v3_in[a2];
+	//	v3_out[b2] = pm[8] * v3_in[a0] + pm[9] * v3_in[a1] + pm[10] * v3_in[a2];
+	//}
+	//template <typename V3Type1, typename V3Type2>
+	//auto s_inv_pq_dot_v3(const double* inv_pm, const double* v3_in, V3Type1 v31_t, double* v3_out, V3Type2 v32_t) noexcept->void {
+	//	const Size a0{ 0 }, a1{ next_r(a0, v31_t) }, a2{ next_r(a1, v31_t) };
+	//	const Size b0{ 0 }, b1{ next_r(b0, v32_t) }, b2{ next_r(b1, v32_t) };
+
+	//	v3_out[b0] = inv_pm[0] * v3_in[a0] + inv_pm[4] * v3_in[a1] + inv_pm[8] * v3_in[a2];
+	//	v3_out[b1] = inv_pm[1] * v3_in[a0] + inv_pm[5] * v3_in[a1] + inv_pm[9] * v3_in[a2];
+	//	v3_out[b2] = inv_pm[2] * v3_in[a0] + inv_pm[6] * v3_in[a1] + inv_pm[10] * v3_in[a2];
+	//}
+
+
 	auto inline s_rq_to_theta_v(const double* q, const double* dq, const double* ddq,
 							   double &theta, double *v, double &dtheta, double *dv, double &d2theta, double *d2v)noexcept->void 
 	{

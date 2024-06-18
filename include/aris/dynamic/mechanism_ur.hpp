@@ -70,6 +70,22 @@ namespace aris::dynamic
 		std::vector<std::array<double, 3> > mot_frc_vec;
 	};
 	auto ARIS_API createModelUr(const UrParam &param)->std::unique_ptr<aris::dynamic::Model>;
+	
+	struct ARIS_API CalibUrParam {
+		double dh_init[6]; // H1 W1 L1 L2 H2 W2
+		double mp_offset_init[6]; // motion pos init offset
+		
+		Size n; // pose num
+		const double* pq_obj_in_eye; // n x 7 : pose in 3d eye
+		const double* joint_pos; // n x 6 : joint pos
+
+		double dh_result[6];
+		double mp_offset_result[6];
+		double eye_pq[7];
+		double avg_obj_pos_err, avg_obj_quad_err;
+	};
+	auto ARIS_API calibUrParamBy3DEye(CalibUrParam & param)->int;
+
 
 	class ARIS_API UrInverseKinematicSolver :public aris::dynamic::InverseKinematicSolver{
 	public:

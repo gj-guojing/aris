@@ -825,9 +825,9 @@ namespace aris::dynamic{
 			// 计算 cp //
 			if (cpt_cp){
 				auto m = static_cast<const Motion*>(d->rel_.blk_data_[1].cst_);
-
+				
 				double rm[9], pm_j_should_be[16];
-				s_rmz(*d->rel_.blk_data_[1].mp_, rm);
+				s_rmz(m->mp2mpInternal(*d->rel_.blk_data_[1].mp_), rm);
 
 				s_vc(16, pmJ, pm_j_should_be);
 				s_mm(3, 3, 3, pmJ, 4, rm, 3, pm_j_should_be, 4);
@@ -859,7 +859,7 @@ namespace aris::dynamic{
 
 				double pm_j_should_be[16];
 				s_vc(16, pmJ, pm_j_should_be);
-				s_va(3, *d->rel_.blk_data_[1].mp_, pm_j_should_be + m->axis(), 4, pm_j_should_be + 3, 4);
+				s_va(3, m->mp2mpInternal(*d->rel_.blk_data_[1].mp_), pm_j_should_be + m->axis(), 4, pm_j_should_be + 3, 4);
 
 				double pm_j2i[16], ps_j2i[6];
 				s_inv_pm_dot_pm(pmI, pm_j_should_be, pm_j2i);
@@ -1828,7 +1828,7 @@ namespace aris::dynamic{
 	};
 
 	struct ForwardKinematicSolver::Imp { 
-		double* J_{ nullptr }, * cf_{ nullptr }, * mp_{nullptr};
+		double* J_{ nullptr }, * cf_{ nullptr };
 		std::vector<char> mem_pool_;
 		aris::Size mJf_{ 0 }, nJf_{ 0 };
 	};
@@ -1847,13 +1847,11 @@ namespace aris::dynamic{
 		aris::Size mem_pool_size{0};
 		core::allocMem(mem_pool_size, imp_->J_, imp_->mJf_ * imp_->nJf_);
 		core::allocMem(mem_pool_size, imp_->cf_, imp_->mJf_);
-		core::allocMem(mem_pool_size, imp_->mp_, imp_->nJf_);
 
 		imp_->mem_pool_.resize(mem_pool_size);
 
 		imp_->J_ = core::getMem(imp_->mem_pool_.data(), imp_->J_);
 		imp_->cf_ = core::getMem(imp_->mem_pool_.data(), imp_->cf_);
-		imp_->mp_ = core::getMem(imp_->mem_pool_.data(), imp_->mp_);
 
 		UniversalSolver::allocateMemory();
 	}
@@ -1873,13 +1871,6 @@ namespace aris::dynamic{
 		for (auto &m : model()->generalMotionPool())m.updA();
 		return 0;
 	}
-	auto ForwardKinematicSolver::kinPosPure(const double* motion_pos, double* answer, int which_root)->int {
-		for (int i = 0; i < model()->motionPool().size(); ++i) {
-			imp_->mp_[i] = model()->motionPool()[i].mp2mpInternal(motion_pos[i]);
-		}
-		return UniversalSolver::kinPosPure(motion_pos, answer, which_root);
-	}
-
 	auto ForwardKinematicSolver::cptJacobi() noexcept->void{
 		cptGeneralJacobi();
 
@@ -1929,7 +1920,6 @@ namespace aris::dynamic{
 			pos += gm.dim();
 		}
 	}
-	
 	auto ForwardKinematicSolver::mJf()const noexcept->Size { return imp_->mJf_;  }
 	auto ForwardKinematicSolver::nJf()const noexcept->Size { return imp_->nJf_; }
 	auto ForwardKinematicSolver::Jf()const noexcept->const double * { return imp_->J_; }
@@ -1979,15 +1969,6 @@ namespace aris::dynamic{
 	auto InverseKinematicSolver::dynAccAndFce()->int{
 		UniversalSolver::dynAccAndFce();
 		for (auto &m : model()->motionPool())m.updA();
-		return 0;
-	}
-	auto InverseKinematicSolver::kinPosPure(const double* motion_pos, double* answer, int which_root)->int {
-		if (auto ret = UniversalSolver::kinPosPure(motion_pos, answer, which_root); ret) {
-			return ret;
-		}
-		for (int i = 0; i < model()->motionPool().size(); ++i) {
-			answer[i] = model()->motionPool()[i].mpInternal2mp(answer[i]);
-		}
 		return 0;
 	}
 	auto InverseKinematicSolver::cptJacobi()noexcept->void{

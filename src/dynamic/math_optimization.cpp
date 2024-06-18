@@ -18,8 +18,8 @@
 
 namespace aris::dynamic {
 	auto ARIS_API s_optimize(OptimizationParam& param)->double {
-		const double zero_check = 1e-14;
-		const double ds = 1e-2;
+		const double zero_check = 1e-10;
+		const double ds = 1e-3;
 		const double iter_max_step = 0.1;
 		
 		Size m = param.observe_size * param.r_size;
@@ -90,6 +90,7 @@ namespace aris::dynamic {
 			
 			// 计算步长，并更新新的最优点 p1 //
 			double step = std::min(gradient_norm, iter_max_step);
+			double r1_norm;
 			for (;;) {
 				// 计算 residual_mid
 				s_vc(n, p0, p1);
@@ -105,7 +106,7 @@ namespace aris::dynamic {
 				for (int i = 0; i < param.observe_size; ++i) {
 					param.cost_func(p1, param.x + i * param.x_size, r + i * param.r_size);
 				}
-				double r1_norm = s_norm(m, r);
+				r1_norm = s_norm(m, r);
 				
 				if ((r1_norm < r_norm && r1_norm < r_mid_norm) || step < zero_check) {
 					r_norm = r1_norm;
