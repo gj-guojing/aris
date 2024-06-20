@@ -66,7 +66,11 @@ namespace aris::dynamic{
 	// mem_need: n x n x 16
 	auto ARIS_API s_eye_in_hand_calib(int n, const double* pq_obj_in_eye, const double* pq_tool_in_base, double* eye_in_tool, double *mem_need)->void;
 
-
+	//
+	// obj_in_eye
+	// tool_in_base
+	// mem_need: n x n x 16
+	auto ARIS_API s_eye_to_hand_calib(int n, const double* pq_obj_in_eye, const double* pq_tool_in_base, double* eye_in_base, double* mem_need)->void;
 
 	auto inline s_sinx_over_x(double x)->double { return std::abs(x) < 1e-8 ? 1.0 : std::sin(x) / x; };
 	// 1-cos(x) = 2 sin(x/2)^2

@@ -474,7 +474,7 @@ namespace aris::dynamic{
 		case GeneralMotion::PoseType::POSE_MATRIX:s_vc(16, output, ee_pos); break;
 		}
 		
-		const double input_period[6]{
+		constexpr double input_period[6]{
 			aris::PI * 2, aris::PI * 2,aris::PI * 2,aris::PI * 2,aris::PI * 2,aris::PI * 2,
 		};
 
