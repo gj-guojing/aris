@@ -5,7 +5,10 @@
 #include <aris/core/object.hpp>
 #include <aris/core/msg.hpp>
 
+
 namespace aris::core{
+	using SOCKET_T = int;
+
 	class ARIS_API SocketMultiIo{
 	public:
 		enum class State{
@@ -29,6 +32,8 @@ namespace aris::core{
 		auto connect(const std::string &remote_ip = std::string(), const std::string &port = std::string())->void;
 		auto stop()->void;
 		auto sendMsg(const aris::core::MsgBase &data)->void;
+		auto sendMultiIoMsg(const aris::core::MsgBase &data, SOCKET_T recv_socket)->void;
+
 		auto sendRawData(const char *data, int size)->void;
 
 		auto port()const->const std::string &;
@@ -43,7 +48,7 @@ namespace aris::core{
 		auto connectTimeoutMs()const->std::int64_t;
 		auto setConnectTimeoutMs(std::int64_t time_out_ms)->void;
 
-		auto setOnReceivedMsg(std::function<int(SocketMultiIo*, aris::core::Msg &)> = nullptr)->void;
+		auto setOnReceivedMsg(std::function<int(SOCKET_T, aris::core::Msg &)> OnReceivedData = nullptr)->void;
 		auto setOnReceivedRawData(std::function<int(SocketMultiIo*, const char *data, int size)> = nullptr)->void;
 		auto setOnReceivedConnection(std::function<int(SocketMultiIo*, const char* remote_ip, int remote_port)> = nullptr)->void;
 		auto setOnLoseConnection(std::function<int(SocketMultiIo*)> = nullptr)->void;
@@ -54,6 +59,58 @@ namespace aris::core{
 		SocketMultiIo(SocketMultiIo && other)noexcept;
 		SocketMultiIo &operator=(const SocketMultiIo& other) = delete;
 		SocketMultiIo &operator=(SocketMultiIo&& other)noexcept;
+
+	private:
+		struct Imp;
+		std::unique_ptr<Imp> imp_;
+	};
+
+	class ARIS_API SocketServer {
+	public:
+		enum class State {
+			IDLE = 0,
+			WORKING,
+		};
+		enum class Type {
+			TCP,
+			UDP,
+			WEB,
+			TCP_RAW,
+			UDP_RAW,
+			WEB_RAW
+		};
+
+		using ReceiveMsgCallback = std::function<int(SocketServer* this_server, SOCKET_T sock, aris::core::Msg&)>;
+		using ReceiveRawDataCallback = std::function<int(SocketServer* this_server, SOCKET_T sock, const char* data, int size)>;
+		using ReceiveConnectionCallback = std::function<int(SocketServer* this_server, SOCKET_T sock, const char* remote_ip, int remote_port)>;
+		using LoseConnectionCallback = std::function<int(SocketServer* this_server, SOCKET_T sock)>;
+
+	public:
+		auto port()const->const std::string&;
+		auto setPort(const std::string& port) -> void;
+		auto connectType()const->Type;
+		auto setConnectType(const Type type) -> void;
+
+		auto setOnReceivedMsg(ReceiveMsgCallback on_receive_msg_func = nullptr) -> void;
+		auto setOnReceivedRawData(ReceiveRawDataCallback on_receive_raw_data_func = nullptr) -> void;
+		auto setOnReceivedConnection(ReceiveConnectionCallback on_receive_connection = nullptr) -> void;
+		auto setOnLoseConnection(LoseConnectionCallback on_lose_connection_func = nullptr) -> void;
+
+		auto state() -> State;
+		auto startServer(const std::string& port = std::string()) -> void;
+		auto stop() -> void;
+		auto sendMsg(SOCKET_T sock, const aris::core::MsgBase& data) -> void;
+		auto sendMsg(std::string_view ip, const aris::core::MsgBase& data) -> void;
+		auto sendRawData(SOCKET_T sock, const char* data, int size) -> void;
+		auto sendRawData(std::string_view ip, const char* data, int size) -> void;
+		//auto remoteIpMap()const->const std::map<SOCKET_T, std::string>&; // 根据 socket 索引 ip
+
+		virtual ~SocketServer();
+		SocketServer(const std::string& name = "socket", const std::string& port = "", Type type = Type::TCP);
+		SocketServer(const SocketServer& other) = delete;
+		SocketServer(SocketServer&& other)noexcept;
+		SocketServer& operator=(const SocketServer& other) = delete;
+		SocketServer& operator=(SocketServer&& other)noexcept;
 
 	private:
 		struct Imp;
