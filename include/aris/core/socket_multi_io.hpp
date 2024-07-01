@@ -97,12 +97,10 @@ namespace aris::core{
 		auto setOnLoseConnection(LoseConnectionCallback on_lose_connection_func = nullptr) -> void;
 
 		auto state() -> State;
-		auto startServer(const std::string& port = std::string()) -> void;
-		auto stop() -> void;
-		auto sendMsg(SOCKET_T sock, const aris::core::MsgBase& data) -> void;
-		auto sendMsg(std::string_view ip, const aris::core::MsgBase& data) -> void;
-		auto sendRawData(SOCKET_T sock, const char* data, int size) -> void;
-		auto sendRawData(std::string_view ip, const char* data, int size) -> void;
+		auto startServer(const std::string& port = std::string()) -> int;
+		auto stop() -> int;
+		auto sendMsg(SOCKET_T sock, const aris::core::MsgBase& data) -> int;
+		auto sendRawData(SOCKET_T sock, const char* data, int size) -> int;
 		//auto remoteIpMap()const->const std::map<SOCKET_T, std::string>&; // 根据 socket 索引 ip
 
 		virtual ~SocketServer();

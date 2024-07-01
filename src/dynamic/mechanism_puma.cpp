@@ -463,8 +463,8 @@ namespace aris::dynamic{
 
 		return 0;
 	}
-	auto PumaInverseKinematicSolver::kinPosPure(const double* output, double* input, int which_root)->int {
-		double current_input_pos[6]{}, ee_pos[16]{}, root_mem[6]{};
+	auto PumaInverseKinematicSolver::kinPosPure(const double* output, double* input, int which_root, const double* current_input)->int {
+		double ee_pos[16]{}, root_mem[6]{};
 		
 		switch (imp_->EE->poseType()) {
 		case GeneralMotion::PoseType::EULER123:s_pe2pm(output, ee_pos, "123"); break;
@@ -478,10 +478,15 @@ namespace aris::dynamic{
 			aris::PI * 2, aris::PI * 2,aris::PI * 2,aris::PI * 2,aris::PI * 2,aris::PI * 2,
 		};
 
-		for (int i = 0; i < 6; ++i)
-			current_input_pos[i] = model()->motionPool()[i].mpInternal();
-
-		return s_ik(6, rootNumber(), &imp_->puma_param, pumaInverse, which_root, ee_pos, input, root_mem, input_period, current_input_pos);
+		if (current_input == nullptr) {
+			double current_input_pos[6];
+			for (int i = 0; i < 6; ++i)
+				current_input_pos[i] = model()->motionPool()[i].mpInternal();
+			return s_ik(6, rootNumber(), &imp_->puma_param, pumaInverse, which_root, ee_pos, input, root_mem, input_period, current_input_pos);
+		}
+		else {
+			return s_ik(6, rootNumber(), &imp_->puma_param, pumaInverse, which_root, ee_pos, input, root_mem, input_period, current_input);
+		}
 	}
 	PumaInverseKinematicSolver::~PumaInverseKinematicSolver() = default;
 	PumaInverseKinematicSolver::PumaInverseKinematicSolver() :InverseKinematicSolver(1, 0.0), imp_(new Imp) {

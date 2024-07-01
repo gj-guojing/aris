@@ -26,7 +26,7 @@ namespace aris::dynamic{
 	auto WaferMachineInverseKinematicSolver::kinPos()->int {
 		double output[3], input[3];
 		model()->getOutputPos(output);
-		kinPosPure(output, input, whichRoot());
+		kinPosPure(output, input, whichRoot(), nullptr);
 		model()->setInputPos(input);
 
 		// 每个关节 makI 相对于 makJ 的pe
@@ -49,7 +49,7 @@ namespace aris::dynamic{
 
 		return 0;
 	}
-	auto WaferMachineInverseKinematicSolver::kinPosPure(const double* output, double* input, int which_root)->int {
+	auto WaferMachineInverseKinematicSolver::kinPosPure(const double* output, double* input, int which_root, const double* current_answer)->int {
 		auto dh = dynamic_cast<aris::dynamic::MatrixVariable*>(model()->findVariable("dh"))->data().data();
 		
 		double a = dh[0];
@@ -106,7 +106,7 @@ namespace aris::dynamic{
 	auto WaferMachineForwardKinematicSolver::kinPos()->int {
 		double output[4], input[4];
 		model()->getInputPos(input);
-		kinPosPure(input, output, whichRoot());
+		kinPosPure(input, output, whichRoot(), nullptr);
 		model()->setOutputPos(output);
 
 		double joint_pe[5][6]{
@@ -133,7 +133,7 @@ namespace aris::dynamic{
 
 		return 0;
 	}
-	auto WaferMachineForwardKinematicSolver::kinPosPure(const double* input, double* output, int which_root)->int {
+	auto WaferMachineForwardKinematicSolver::kinPosPure(const double* input, double* output, int which_root, const double *current_answer)->int {
 		auto dh = dynamic_cast<aris::dynamic::MatrixVariable*>(model()->findVariable("dh"))->data().data();
 
 		double a = dh[0];
@@ -211,7 +211,7 @@ namespace aris::dynamic{
 
 		return 0;
 	}
-	auto WaferMachineInverseKinematicSolverTwoArm::kinPosPure(const double* output, double* input, int which_root)->int {
+	auto WaferMachineInverseKinematicSolverTwoArm::kinPosPure(const double* output, double* input, int which_root, const double* current_answer)->int {
 		auto dh = dynamic_cast<aris::dynamic::MatrixVariable*>(model()->findVariable("dh"))->data().data();
 
 		double a = dh[0];
@@ -301,7 +301,7 @@ namespace aris::dynamic{
 
 		return 0;
 	}
-	auto WaferMachineForwardKinematicSolverTwoArm::kinPosPure(const double* input, double* output, int which_root)->int {
+	auto WaferMachineForwardKinematicSolverTwoArm::kinPosPure(const double* input, double* output, int which_root, const double* current_answer)->int {
 		auto dh = dynamic_cast<aris::dynamic::MatrixVariable*>(model()->findVariable("dh"))->data().data();
 
 		double a = dh[0];

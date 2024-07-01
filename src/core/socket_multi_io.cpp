@@ -63,6 +63,14 @@
                                                                                          "SocketMultiIo Shutdown 关闭错误：%d"}
 #define SOCKET_SHUT_CLOSE_ERROR                      aris::core::LogLvl::kError, -3010, {"socket close error %d"\
                                                                                          "SocketMultiIo Close 关闭错误：%d"}
+#define SOCKET_SERVER_START_ERROR                    aris::core::LogLvl::kError, -3011, {"SocketServer startServer error: %s"\
+                                                                                         "SocketServer startServer 错误：%s"}
+#define SOCKET_SERVER_STOP_ERROR                     aris::core::LogLvl::kError, -3012, {"SocketServer stop error: %d"\
+                                                                                         "SocketServer stop 错误：%d"}
+#define SOCKET_SERVER_SEND_MSG_ERROR                 aris::core::LogLvl::kError, -3013, {"SocketServer sendMsg error: %d"\
+                                                                                         "SocketServer sendMsg 错误：%d"}
+#define SOCKET_SERVER_SEND_RAW_DATA_ERROR            aris::core::LogLvl::kError, -3014, {"SocketServer sendRawData error: %d"\
+                                                                                         "SocketServer sendRawData 错误：%d"}
 
 namespace aris::core{
 	
@@ -1605,12 +1613,12 @@ namespace aris::core{
 			}
 			case Type::WEB: {
 				int ret = 0;
-				if ((ret = safe_recv2(recv_sock, recv_data)) < 0)
+				if ((ret = safe_recv2(recv_sock, recv_data)) <= 0)
 					return ret;
 
 				bool fin;
 				char web_head[2];
-				std::int64_t payload_len;
+				std::int64_t payload_len{0};
 				while (recv_data.received_length_ >= recv_data.required_length_) {
 					// 接受头 //
 					int frame_length = 0;
@@ -1982,22 +1990,27 @@ namespace aris::core{
 		std::unique_lock<std::recursive_mutex> lck(imp_->state_mutex_);
 		return imp_->state_;
 	}
-	auto SocketServer::startServer(const std::string& port) -> void {
+	auto SocketServer::startServer(const std::string& port) -> int {
 		std::unique_lock<std::recursive_mutex> lck(imp_->state_mutex_);
 
-		if(imp_->accept_thread_.joinable())
-			THROW_FILE_LINE("SocketServer can't Start as server, because it is not at idle state\n");
+		if (imp_->accept_thread_.joinable()) {
+			ARIS_LOG(SOCKET_SERVER_START_ERROR, "already started");
+			return -1;
+		}
 
 		switch (imp_->state_) {
 		case State::IDLE:
 			break;
 		default:
-			THROW_FILE_LINE("SocketServer can't Start as server, because it is not at idle state\n");
+			ARIS_LOG(SOCKET_SERVER_START_ERROR, "wrong state");
+			return -2;
 		}
 
 		if (!port.empty())setPort(port);
-		if (this->port().empty())
-			THROW_FILE_LINE("SocketServer can't Start as server, because it has empty port\n");
+		if (this->port().empty()) {
+			ARIS_LOG(SOCKET_SERVER_START_ERROR, "wrong port");
+			return -3;
+		}
 
 		imp_->init_all_socks();
 
@@ -2018,8 +2031,10 @@ namespace aris::core{
 		///////////////////////////////////////////////////////////////////////////////////////////////
 
 		// 服务器端开始建立socket描述符 //
-		if (static_cast<int>(imp_->lisn_socket_ = static_cast<SOCKET_T>(socket(AF_INET, sock_type, 0))) == -1)
-			THROW_FILE_LINE("SocketServer can't Start as server, because it can't socket\n");
+		if (static_cast<int>(imp_->lisn_socket_ = static_cast<SOCKET_T>(socket(AF_INET, sock_type, 0))) == -1) {
+			ARIS_LOG(SOCKET_SERVER_START_ERROR, "failed socket");
+			return -4;
+		}
 
 		// linux 下设置keep alive
 #ifdef UNIX
@@ -2027,7 +2042,8 @@ namespace aris::core{
 			int tcp_timeout = 10000; //10 seconds before aborting a write()
 			if (setsockopt(imp_->lisn_socket_, SOL_TCP, TCP_USER_TIMEOUT, &tcp_timeout, sizeof(int)) < 0) {
 				aris_close(imp_->lisn_socket_);
-				THROW_FILE_LINE("socket setsockopt TCP_USER_TIMEOUT FAILED");
+				ARIS_LOG(SOCKET_SERVER_START_ERROR, "setsockopt TCP_USER_TIMEOUT FAILED");
+				return -5;
 			}
 
 			// Set the option active //
@@ -2038,19 +2054,23 @@ namespace aris::core{
 
 			if (setsockopt(imp_->lisn_socket_, SOL_SOCKET, SO_KEEPALIVE, (void*)&keepAlive, sizeof(keepAlive)) < 0) {
 				aris_close(imp_->lisn_socket_);
-				THROW_FILE_LINE("socket setsockopt SO_KEEPALIVE FAILED");
+				ARIS_LOG(SOCKET_SERVER_START_ERROR, "setsockopt SO_KEEPALIVE FAILED");
+				return -6;
 			}
 			if (setsockopt(imp_->lisn_socket_, IPPROTO_TCP, TCP_KEEPIDLE, (void*)&keepIdle, sizeof(keepIdle)) < 0) {
 				aris_close(imp_->lisn_socket_);
-				THROW_FILE_LINE("socket setsockopt TCP_KEEPIDLE FAILED");
+				ARIS_LOG(SOCKET_SERVER_START_ERROR, "setsockopt TCP_KEEPIDLE FAILED");
+				return -7;
 			}
 			if (setsockopt(imp_->lisn_socket_, IPPROTO_TCP, TCP_KEEPINTVL, (void*)&keepInterval, sizeof(keepInterval)) < 0) {
 				aris_close(imp_->lisn_socket_);
-				THROW_FILE_LINE("socket setsockopt TCP_KEEPINTVL FAILED");
+				ARIS_LOG(SOCKET_SERVER_START_ERROR, "setsockopt TCP_KEEPINTVL FAILED");
+				return -8;
 			}
 			if (setsockopt(imp_->lisn_socket_, IPPROTO_TCP, TCP_KEEPCNT, (void*)&keepCount, sizeof(keepCount)) < 0) {
 				aris_close(imp_->lisn_socket_);
-				THROW_FILE_LINE("socket setsockopt TCP_KEEPCNT FAILED");
+				ARIS_LOG(SOCKET_SERVER_START_ERROR, "setsockopt TCP_KEEPCNT FAILED");
+				return -9;
 			}
 		}
 #endif
@@ -2059,7 +2079,8 @@ namespace aris::core{
 		int nvalue = 1;
 		if (::setsockopt(imp_->lisn_socket_, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<char*>(&nvalue), sizeof(int)) < 0) {
 			aris_close(imp_->lisn_socket_);
-			THROW_FILE_LINE("setsockopt failed: SO_REUSEADDR \n");
+			ARIS_LOG(SOCKET_SERVER_START_ERROR, "setsockopt SO_REUSEADDR FAILED");
+			return -10;
 		}
 
 		// 服务器端填充server_addr_结构,并且bind //
@@ -2072,7 +2093,8 @@ namespace aris::core{
 			int err = WSAGetLastError();
 #endif
 			aris_close(imp_->lisn_socket_);
-			THROW_FILE_LINE("SocketMultiIo can't Start as server, because it can't bind\n");
+			ARIS_LOG(SOCKET_SERVER_START_ERROR, "bind FAILED");
+			return -11;
 		}
 
 		if (imp_->socket_server_->connectType() == Type::TCP ||
@@ -2082,7 +2104,8 @@ namespace aris::core{
 			// 监听lisn_socket_描述符 //
 			if (::listen(imp_->lisn_socket_, 5) == -1) {
 				aris_close(imp_->lisn_socket_);
-				THROW_FILE_LINE("SocketMultiIo can't Start as server, because it can't listen\n");
+				ARIS_LOG(SOCKET_SERVER_START_ERROR, "listen FAILED");
+				return -12;
 			}
 		}
 		else {
@@ -2091,7 +2114,8 @@ namespace aris::core{
 			DWORD read_timeout = 10;
 			if (::setsockopt(imp_->lisn_socket_, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<char*>(&read_timeout), sizeof(read_timeout)) < 0) {
 				aris_close(imp_->lisn_socket_);
-				THROW_FILE_LINE("setsockopt failed: SO_RCVTIMEO \n");
+				ARIS_LOG(SOCKET_SERVER_START_ERROR, "setsockopt SO_RCVTIMEO FAILED");
+				return -13;
 			}
 #endif
 #ifdef UNIX
@@ -2100,7 +2124,8 @@ namespace aris::core{
 			read_timeout.tv_usec = 10000;
 			if (::setsockopt(imp_->lisn_socket_, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<char*>(&read_timeout), sizeof(read_timeout)) < 0) {
 				aris_close(imp_->lisn_socket_);
-				THROW_FILE_LINE("setsockopt failed: SO_RCVTIMEO \n");
+				ARIS_LOG(SOCKET_SERVER_START_ERROR, "setsockopt SO_RCVTIMEO FAILED");
+				return -13;
 			}
 #endif
 			std::promise<void> receive_thread_ready;
@@ -2121,14 +2146,14 @@ namespace aris::core{
 		
 		try {
 			ready.get();
-			return;
+			return 0;
 		}
 		catch(...){
 			imp_->accept_thread_.join();
 			std::rethrow_exception(std::current_exception());
 		}
 	}
-	auto SocketServer::stop() -> void {
+	auto SocketServer::stop() -> int {
 		{
 			std::unique_lock<std::recursive_mutex> lck(imp_->state_mutex_);
 			imp_->state_ = State::IDLE;
@@ -2136,8 +2161,10 @@ namespace aris::core{
 
 		if(imp_->accept_thread_.joinable())
 			imp_->accept_thread_.join();
+
+		return 0;
 	}
-	auto SocketServer::sendMsg(SOCKET_T sock, const aris::core::MsgBase& data) -> void {
+	auto SocketServer::sendMsg(SOCKET_T sock, const aris::core::MsgBase& data) -> int {
 #ifdef UNIX
 		signal(SIGPIPE, SIG_IGN);
 #endif
@@ -2146,27 +2173,21 @@ namespace aris::core{
 
 		auto ip = imp_->sock_datas_.at(sock).remote_ip_;
 
-		//auto ip_iter = this->remoteIpMap().find(sock);
-		//if (ip_iter == remoteIpMap().end()) {
-		//	THROW_FILE_LINE("SocketMultiIo failed sending data, because invalid sock, cannot find corresponding ip\n");
-		//}
-		//auto &ip = ip_iter->second;
-
 		switch (imp_->state_) {
 		case State::WORKING: {
 			switch (imp_->type_) {
 			case Type::TCP:
-				if (aris_send(sock, reinterpret_cast<const char*>(&data.header()), data.size() + sizeof(MsgHeader), 0) == -1)
-					THROW_FILE_LINE("SocketMultiIo failed sending data, because network failed\n");
-				else
-					return;
+				if (auto ret = aris_send(sock, reinterpret_cast<const char*>(&data.header()), data.size() + sizeof(MsgHeader), 0); ret < 0) {
+					ARIS_LOG(SOCKET_SERVER_SEND_MSG_ERROR, ret);
+					return ret;
+				}
 				break;
 			case Type::WEB: {
 				auto packed_data = pack_data_server2(reinterpret_cast<const char*>(&data.header()), data.size() + sizeof(aris::core::MsgHeader));
-				if (aris_send(sock, packed_data.data(), static_cast<int>(packed_data.size()), 0) == -1)
-					THROW_FILE_LINE("SocketMultiIo failed sending data, because network failed\n");
-				else
-					return;
+				if (auto ret = aris_send(sock, packed_data.data(), static_cast<int>(packed_data.size()), 0); ret < 0) {
+					ARIS_LOG(SOCKET_SERVER_SEND_MSG_ERROR, ret);
+					return ret;
+				}
 				break;
 			}
 			case Type::UDP: {
@@ -2178,19 +2199,23 @@ namespace aris::core{
 				if (sendto(sock, reinterpret_cast<const char*>(&data.header()), data.size() + sizeof(MsgHeader), 0, (const struct sockaddr*)&imp_->server_addr_, sizeof(imp_->server_addr_)) == -1)
 					THROW_FILE_LINE("SocketMultiIo failed sending data, because network failed\n");
 				else
-					return;
+					return 0;
 
 				break;
 			}
 			default:
-				THROW_FILE_LINE("SocketMultiIo failed send msg, because SocketMultiIo is not at right MODE\n");
+				ARIS_LOG(SOCKET_SERVER_SEND_MSG_ERROR, -1);
+				return -1;
 			}
 		}
 		default:
-			THROW_FILE_LINE("SocketMultiIo failed sending data, because SocketMultiIo is not at right STATE\n");
+			ARIS_LOG(SOCKET_SERVER_SEND_MSG_ERROR, -2);
+			return -1;
 		}
+
+		return 0;
 	}
-	auto SocketServer::sendRawData(SOCKET_T sock, const char* data, int size) -> void {
+	auto SocketServer::sendRawData(SOCKET_T sock, const char* data, int size) -> int {
 #ifdef UNIX
 		signal(SIGPIPE, SIG_IGN);
 #endif
@@ -2202,18 +2227,18 @@ namespace aris::core{
 		case State::WORKING: {
 			switch (imp_->type_) {
 			case Type::TCP_RAW: {
-				if (aris_send(sock, data, size, 0) == -1)
-					THROW_FILE_LINE("SocketServer failed sending data, because network failed\n");
-				else
-					return;
+				if (auto ret = aris_send(sock, data, size, 0); ret < 0) {
+					ARIS_LOG(SOCKET_SERVER_SEND_RAW_DATA_ERROR, ret);
+					return ret;
+				}
 				break;
 			}
 			case Type::WEB_RAW: {
 				auto packed_data = pack_data_client2(data, size);
-				if (aris_send(sock, packed_data.data(), static_cast<int>(packed_data.size()), 0) == -1)
-					THROW_FILE_LINE("SocketServer failed sending data, because network failed\n");
-				else
-					return;
+				if (auto ret = aris_send(sock, packed_data.data(), static_cast<int>(packed_data.size()), 0); ret < 0) {
+					ARIS_LOG(SOCKET_SERVER_SEND_RAW_DATA_ERROR, ret);
+					return ret;
+				}
 				break;
 			}
 			case Type::UDP_RAW: {
@@ -2225,17 +2250,19 @@ namespace aris::core{
 				if (sendto(sock, data, size, 0, (const struct sockaddr*)&imp_->server_addr_, sizeof(imp_->server_addr_)) == -1)
 					THROW_FILE_LINE("SocketServer failed sending data, because network failed\n");
 				else
-					return;
+					return 0;
 
 				break;
 			}
 			default:
-				THROW_FILE_LINE("SocketServer failed send raw data, because SocketServer is not at right MODE\n");
+				ARIS_LOG(SOCKET_SERVER_SEND_RAW_DATA_ERROR, -1);
 			}
 		}
 		default:
-			THROW_FILE_LINE("SocketServer failed send raw data, because SocketServer is not at right STATE\n");
+			ARIS_LOG(SOCKET_SERVER_SEND_RAW_DATA_ERROR, -1);
 		}
+
+		return 0;
 	}
 	//auto SocketServer::remoteIpMap()const->const std::map<SOCKET_T, std::string>& {
 	//	return imp_->remote_ip_map_;

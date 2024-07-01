@@ -1478,7 +1478,7 @@ namespace aris::dynamic{
 
 		return 0;
 	}
-	auto UniversalSolver::kinPosPure(const double* motion_pos, double* answer, int which_root)->int {
+	auto UniversalSolver::kinPosPure(const double* motion_pos, double* answer, int which_root, const double* current_answer)->int {
 		kinPosSetActiveMotionPos(motion_pos);
 		if (auto ret = kinPosCompute())
 			return ret;
@@ -1496,7 +1496,7 @@ namespace aris::dynamic{
 		}
 		else {
 			for (int i = 0; i < rootNumber(); ++i) {
-				kinPosPure(motion_pos, imp_->pd_->deactive_mp_, i);
+				kinPosPure(motion_pos, imp_->pd_->deactive_mp_, i, answer);
 				aris::Size pos = 0;
 				double this_error = 0.0;
 				for (int j = 0; j < imp_->pd_->deactive_mot_size_; ++j) {

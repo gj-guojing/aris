@@ -367,9 +367,9 @@ void test_model_solver_ur()
 
 
 	test_ur_calib_dh();
-	//test_ur_forward_solver();
-	//test_ur_inverse_solver();
-	//test_ur_vel();
+	test_ur_forward_solver();
+	test_ur_inverse_solver();
+	test_ur_vel();
 
 	//auto m = createUrModel(j_pos, j_axis, pe_ee_i, pe_ee_j);
 
