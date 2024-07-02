@@ -1813,6 +1813,8 @@ namespace aris::core{
 				break;
 			}
 			}
+
+			return 0;
 		}
 	};
 	auto SocketServer::Imp::acceptThread(SocketServer::Imp* imp, std::promise<void> accept_thread_ready)->void {

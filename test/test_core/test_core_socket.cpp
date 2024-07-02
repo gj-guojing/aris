@@ -271,7 +271,7 @@ void test_socket_multi_io_clients() {
 				connect_executed = true;
 				return 0;
 				});
-			server.setOnReceivedMsg([&](SocketMultiIo*, Msg& msg) {
+			server.setOnReceivedMsg([&](aris::core::SOCKET_T sock, Msg& msg) {
 				std::string str(msg.data(), msg.size());
 				std::stringstream ss(str);
 				std::string word;
