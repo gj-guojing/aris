@@ -1516,9 +1516,11 @@ namespace aris::core{
 
 		// RAII to close sock
 		~SockData() {
-			if (shutdown(sock_, 2) < 0)
-				ARIS_LOG(SOCKET_SHUT_CLOSE_ERROR, errno);
-			aris_close(sock_);
+			if (sock_) {
+				if (shutdown(sock_, 2) < 0)
+					ARIS_LOG(SOCKET_SHUT_CLOSE_ERROR, errno);
+				aris_close(sock_);
+			}
 		}
 	};
 	auto safe_recv2(SOCKET_T s, SockData& data) -> int {
@@ -1860,6 +1862,8 @@ namespace aris::core{
 
 					imp->sock_datas_.insert(std::pair<SOCKET_T, SockData>(recv_sock, SockData()));
 					imp->sock_datas_[recv_sock].sock_ = recv_sock;
+					
+					
 					switch (imp->socket_server_->connectType())
 					{
 					case SocketServer::Type::TCP:
