@@ -1024,11 +1024,11 @@ namespace aris::core{
 #endif
 #ifdef UNIX
 			long arg;
-			if ((arg = fcntl(imp->recv_socket_, F_GETFL, NULL)) < 0) {
+			if ((arg = fcntl(imp_->recv_socket_, F_GETFL, NULL)) < 0) {
 				imp_->lose_tcp();
 			}
 			arg &= (~O_NONBLOCK);
-			if (fcntl(imp->recv_socket_, F_SETFL, arg) < 0) {
+			if (fcntl(imp_->recv_socket_, F_SETFL, arg) < 0) {
 				imp_->lose_tcp();
 			}
 #endif
