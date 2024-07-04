@@ -941,10 +941,98 @@ namespace aris::core{
 		}
 		case Type::WEB:
 		case Type::WEB_RAW:{
-			if (::connect(imp_->recv_socket_, (const struct sockaddr *)&imp_->server_addr_, sizeof(imp_->server_addr_)) == -1) {
-				aris_close(imp_->recv_socket_);
-				THROW_FILE_LINE("Socket can't connect, because can't connect\n");
+			if (::connect(imp_->recv_socket_, (const struct sockaddr*)&imp_->server_addr_, sizeof(imp_->server_addr_)) == -1) {
+				fd_set setW, setE;
+				FD_ZERO(&setW);
+				FD_SET(imp_->recv_socket_, &setW);
+				FD_ZERO(&setE);
+				FD_SET(imp_->recv_socket_, &setE);
+
+				timeval time_out = { 0 };
+				time_out.tv_sec = imp_->connect_time_out_ / 1000;
+				time_out.tv_usec = (imp_->connect_time_out_ % 1000) * 1000;
+
+#ifdef WIN32
+				if (WSAGetLastError() == WSAEWOULDBLOCK) {
+					// connection pending
+					int ret = select(0, NULL, &setW, &setE, &time_out);
+					if (ret < 0) {
+						aris_close(imp_->recv_socket_);
+						THROW_FILE_LINE("Socket can't connect, because failed to select\n");
+					}
+					else if (ret == 0) {
+						aris_close(imp_->recv_socket_);
+						WSASetLastError(WSAETIMEDOUT);
+						THROW_FILE_LINE("Socket can't connect, because time out\n");
+					}
+					else {
+
+					}
+
+					if (FD_ISSET(imp_->recv_socket_, &setE)) {
+						// connection failed
+						int err = 0, err_size = sizeof(int);
+						getsockopt(imp_->recv_socket_, SOL_SOCKET, SO_ERROR, (char*)&err, &err_size);
+						aris_close(imp_->recv_socket_);
+						WSASetLastError(err);
+						THROW_FILE_LINE("Socket can't connect, because failed to FD_ISSET\n");
+					}
+				}
+				else {
+					aris_close(imp_->recv_socket_);
+					THROW_FILE_LINE("Socket can't connect, because can't connect\n");
+				}
+#endif
+#ifdef UNIX
+				do {
+					auto ret = select(imp_->recv_socket_ + 1, NULL, &setW, &setE, &time_out);
+					if (ret > 0) {
+						int so_error;
+						socklen_t len = sizeof(so_error);
+						if (getsockopt(imp_->recv_socket_, SOL_SOCKET, SO_ERROR, &so_error, &len) < 0) {
+							aris_close(imp_->recv_socket_);
+							THROW_FILE_LINE("Socket can't connect, because can't getsockopt\n");
+						}
+						if (so_error) {
+							aris_close(imp_->recv_socket_);
+							if (time_out.tv_sec == 0 && time_out.tv_usec == 0)
+								THROW_FILE_LINE("Socket can't connect, because getsockopt error\n");
+							else
+								continue;
+						}
+						else
+							break;// 正常结束
+					}
+					else if (ret == 0) {
+						aris_close(imp_->recv_socket_);
+						THROW_FILE_LINE("Socket can't connect, because time out\n");
+					}
+					else {
+						aris_close(imp_->recv_socket_);
+						THROW_FILE_LINE("Socket can't connect, because failed to select\n");
+					}
+				} while (1);
+#endif	
 			}
+
+			// 设置为 non-blocking 模式 //
+#ifdef WIN32
+			u_long block = 0;
+			if (ioctlsocket(imp_->recv_socket_, FIONBIO, &block) == SOCKET_ERROR) {
+				imp_->lose_tcp();
+			}
+#endif
+#ifdef UNIX
+			long arg;
+			if ((arg = fcntl(imp->recv_socket_, F_GETFL, NULL)) < 0) {
+				imp_->lose_tcp();
+			}
+			arg &= (~O_NONBLOCK);
+			if (fcntl(imp->recv_socket_, F_SETFL, arg) < 0) {
+				imp_->lose_tcp();
+			}
+#endif
+
 
 			char handshake_text[]{
 				"GET / HTTP/1.1\r\n"
@@ -960,7 +1048,8 @@ namespace aris::core{
 
 			char recv_data[1024]{ 0 };
 			int res = recv(imp_->recv_socket_, recv_data, 1024, 0);
-			if(res <= 0)THROW_FILE_LINE("Socket can't connect, web sock error 2\n");
+			if(res <= 0)
+				THROW_FILE_LINE("Socket can't connect, web sock error 2\n");
 
 			auto header_map = make_header_map(recv_data);
 

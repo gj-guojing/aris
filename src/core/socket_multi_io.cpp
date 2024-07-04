@@ -1503,12 +1503,13 @@ namespace aris::core{
 		// recv data // 
 		int required_length_{ sizeof(aris::core::MsgHeader) };
 		int received_length_{ 0 };
-		std::vector<char> mem_; 
+		std::vector<char> mem_;
+		bool is_first{ true };
 
 		// pack data，多个数据帧（frame）拼成完整的数据后，触发回调 //
-		int data_required_length_{ 0 };
-		int data_received_length_{ 0 };
-		std::vector<char> data_mem_;
+		int datapack_required_length_{ 0 };
+		int datapack_received_length_{ 0 };
+		std::vector<char> datapack_mem_;
 
 		// remote info //
 		struct sockaddr_in remote_addr_{};
@@ -1614,113 +1615,177 @@ namespace aris::core{
 				return ret;
 			}
 			case Type::WEB: {
-				int ret = 0;
-				if ((ret = safe_recv2(recv_sock, recv_data)) <= 0)
-					return ret;
+				if (recv_data.is_first) {
+					recv_data.required_length_ = 1024;
 
-				bool fin;
-				char web_head[2];
-				std::int64_t payload_len{0};
-				while (recv_data.received_length_ >= recv_data.required_length_) {
-					// 接受头 //
-					int frame_length = 0;
-					recv_data.required_length_ = frame_length + 2;
-					if (recv_data.received_length_ >= recv_data.required_length_) {
-						std::copy_n(recv_data.mem_.data(), 2, web_head);
-
-						// 是否最后一帧 //
-						fin = (web_head[0] & 0x80) == 0x80; // 1bit，1表示最后一帧    
-
-						// 获取opcode //
-						std::int8_t op_code = web_head[0] & 0x0f;
-						if (op_code == 0x08)
-							return -1;
-
-						// 获取数据长度
-						payload_len = web_head[1] & 0x7F; // 数据长度
-
-						frame_length += 2;
+					int ret = 0;
+					if ((ret = safe_recv2(recv_sock, recv_data)) <= 0) {
+						ARIS_LOG(WEBSOCKET_SHAKE_HAND_FAILED, ret);
+						return ret;
 					}
 
-					recv_data.required_length_ = frame_length + 2;
-					if (payload_len == 126 && recv_data.received_length_ > recv_data.required_length_) {
-						// 似乎有大小端的问题 //
-						char reverse_char[2];
-						for (int i = 0; i < 2; ++i)reverse_char[i] = recv_data.mem_[3 - i];
-						payload_len = *reinterpret_cast<std::uint16_t*>(reverse_char);
+					auto recv_str = std::string_view(recv_data.mem_.data(), recv_data.received_length_);
 
-						frame_length += 2;
+					if (recv_data.received_length_ > 1023) {
+						ARIS_LOG(WEBSOCKET_SHAKE_HAND_FAILED, -1);
+						return ret;
 					}
 
-					recv_data.required_length_ = frame_length + 8;
-					if (payload_len == 127 && recv_data.received_length_ > recv_data.required_length_) {
-						char reverse_char[8];
-						for (int i = 0; i < 8; ++i)reverse_char[i] = recv_data.mem_[10 - i];
-						payload_len = *reinterpret_cast<std::int64_t*>(reverse_char);
+					if (recv_str.find("\r\n\r\n") == std::string::npos)
+						return ret;
 
-						frame_length += 8;
+					auto header_map = make_header_map2(std::string(recv_str));
+					std::string server_key;
+					try {
+						server_key = header_map.at("Sec-WebSocket-Key");
 					}
-
-					// 保护，数据不能太大 //
-					if (payload_len < 0 || payload_len > 0x00080000 || payload_len + recv_data.data_received_length_ > 0x00100000) {
-						ARIS_LOG(WEBSOCKET_RECEIVE_TOO_LARGE_OBJECT, payload_len);
+					catch (std::exception&) {
+						ARIS_LOG(WEBSOCKET_SHAKE_HAND_FAILED_INVALID_KEY);
 						return -1;
 					}
+					server_key += "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
-					// 获取掩码
-					bool mask_flag = (web_head[1] & 0x80) == 0x80; // 是否包含掩码    
-					char masks[4];
-					recv_data.required_length_ = frame_length + 4;
-					if (mask_flag && recv_data.received_length_ > recv_data.required_length_) {
-						std::copy_n(recv_data.mem_.data() + frame_length, 4, masks);
-						frame_length += 4;
+					// 找到返回的key //
+					SHA1 checksum;
+					checksum.update(server_key);
+					std::string hash = checksum.final();
+
+					std::uint32_t message_digest[5]{};
+					for (Size i = 0; i < 20; ++i) {
+						char num[5] = "0x00";
+						std::copy_n(hash.data() + i * 2, 2, num + 2);
+						std::uint8_t n = std::stoi(num, 0, 16);
+						*(reinterpret_cast<unsigned char*>(message_digest) + i) = n;
 					}
 
-					// 读取数据 
-					recv_data.required_length_ = frame_length + payload_len;
-					if (recv_data.received_length_ >= recv_data.required_length_) {
-						recv_data.data_mem_.resize(payload_len + recv_data.data_received_length_);
+					auto ret_hey = base64_encode2_2(reinterpret_cast<const unsigned char*>(message_digest), 20);
 
-						if (mask_flag) {
-							for (int i{ 0 }; i < payload_len; ++i) {
-								recv_data.data_mem_[i + recv_data.data_received_length_] = recv_data.mem_[i+frame_length] ^ masks[i % 4];
-							}
-						}
-						else {
-							std::copy_n(recv_data.mem_.data(), payload_len, recv_data.data_mem_.data() + recv_data.data_received_length_);
-						}
+					std::string shake_hand;
+					shake_hand = "HTTP/1.1 101 Switching Protocols\r\n"
+						"Upgrade: websocket\r\n"
+						"Connection: Upgrade\r\n"
+						"Sec-WebSocket-Accept: " + ret_hey + std::string("\r\n\r\n");
 
-						recv_data.data_received_length_ += payload_len;
-						frame_length += payload_len;
-					}
+					auto send_ret = aris_send(recv_sock, shake_hand.c_str(), static_cast<int>(shake_hand.size()), 0);
 
-					// 是否触发回调 //
-					if (recv_data.received_length_ >= recv_data.required_length_ && fin) {
-						// 把web sock 的东西转成 msg //
-						recv_msg.resize(static_cast<aris::core::MsgSize>(recv_data.data_received_length_ - sizeof(aris::core::MsgHeader)));
-						std::copy_n(recv_data.data_mem_.data(), recv_data.data_received_length_, reinterpret_cast<char*>(&recv_msg.header()));
+					if (send_ret == -1) {
+						ARIS_LOG(WEBSOCKET_SHAKE_HAND_FAILED_LOOSE_CONNECTION);
+						return send_ret;
+					};
 
-						if (recv_msg.size() != recv_data.data_received_length_ - sizeof(aris::core::MsgHeader)) {
-							ARIS_LOG(WEBSOCKET_RECEIVE_WRONG_MSG_SIZE, recv_msg.size(), recv_data.data_received_length_);
-							break;
-						}
-
-						if (on_receive_msg_)
-							on_receive_msg_(socket_server_, recv_sock, recv_msg);
-
-						recv_data.data_received_length_ = 0;
-					}
-
-					// 本帧已经收取完毕，准备下一帧
-					if (recv_data.received_length_ >= recv_data.required_length_) {
-						std::copy_n(recv_data.mem_.data() + recv_data.required_length_, recv_data.received_length_ - recv_data.required_length_, recv_data.mem_.data());
-						recv_data.received_length_ -= recv_data.required_length_;
-						recv_data.required_length_ = 2;
-					}
-
-					
+					recv_data.required_length_ = 2;
+					recv_data.received_length_ = 0;
+					recv_data.is_first = false;
+					return ret;
 				}
-				return ret;
+				else {
+					int ret = 0;
+					if ((ret = safe_recv2(recv_sock, recv_data)) <= 0)
+						return ret;
+
+					bool fin;
+					char web_head[2];
+					std::int64_t payload_len{ 0 };
+					while (recv_data.received_length_ >= recv_data.required_length_) {
+						// 接受头 //
+						int frame_length = 0;
+						recv_data.required_length_ = frame_length + 2;
+						if (recv_data.received_length_ >= recv_data.required_length_) {
+							std::copy_n(recv_data.mem_.data(), 2, web_head);
+
+							// 是否最后一帧 //
+							fin = (web_head[0] & 0x80) == 0x80; // 1bit，1表示最后一帧    
+
+							// 获取opcode //
+							std::int8_t op_code = web_head[0] & 0x0f;
+							if (op_code == 0x08)
+								return -1;
+
+							// 获取数据长度
+							payload_len = web_head[1] & 0x7F; // 数据长度
+
+							frame_length += 2;
+						}
+
+						recv_data.required_length_ = frame_length + 2;
+						if (payload_len == 126 && recv_data.received_length_ > recv_data.required_length_) {
+							// 似乎有大小端的问题 //
+							char reverse_char[2];
+							for (int i = 0; i < 2; ++i)reverse_char[i] = recv_data.mem_[3 - i];
+							payload_len = *reinterpret_cast<std::uint16_t*>(reverse_char);
+
+							frame_length += 2;
+						}
+
+						recv_data.required_length_ = frame_length + 8;
+						if (payload_len == 127 && recv_data.received_length_ > recv_data.required_length_) {
+							char reverse_char[8];
+							for (int i = 0; i < 8; ++i)reverse_char[i] = recv_data.mem_[10 - i];
+							payload_len = *reinterpret_cast<std::int64_t*>(reverse_char);
+
+							frame_length += 8;
+						}
+
+						// 保护，数据不能太大 //
+						if (payload_len < 0 || payload_len > 0x00080000 || payload_len + recv_data.datapack_received_length_ > 0x00100000) {
+							ARIS_LOG(WEBSOCKET_RECEIVE_TOO_LARGE_OBJECT, payload_len);
+							return -1;
+						}
+
+						// 获取掩码
+						bool mask_flag = (web_head[1] & 0x80) == 0x80; // 是否包含掩码    
+						char masks[4];
+						recv_data.required_length_ = frame_length + 4;
+						if (mask_flag && recv_data.received_length_ > recv_data.required_length_) {
+							std::copy_n(recv_data.mem_.data() + frame_length, 4, masks);
+							frame_length += 4;
+						}
+
+						// 读取数据 
+						recv_data.required_length_ = frame_length + payload_len;
+						if (recv_data.received_length_ >= recv_data.required_length_) {
+							recv_data.datapack_mem_.resize(payload_len + recv_data.datapack_received_length_);
+
+							if (mask_flag) {
+								for (int i{ 0 }; i < payload_len; ++i) {
+									recv_data.datapack_mem_[i + recv_data.datapack_received_length_] = recv_data.mem_[i + frame_length] ^ masks[i % 4];
+								}
+							}
+							else {
+								std::copy_n(recv_data.mem_.data(), payload_len, recv_data.datapack_mem_.data() + recv_data.datapack_received_length_);
+							}
+
+							recv_data.datapack_received_length_ += payload_len;
+							frame_length += payload_len;
+						}
+
+						// 是否触发回调 //
+						if (recv_data.received_length_ >= recv_data.required_length_ && fin) {
+							// 把web sock 的东西转成 msg //
+							recv_msg.resize(static_cast<aris::core::MsgSize>(recv_data.datapack_received_length_ - sizeof(aris::core::MsgHeader)));
+							std::copy_n(recv_data.datapack_mem_.data(), recv_data.datapack_received_length_, reinterpret_cast<char*>(&recv_msg.header()));
+
+							if (recv_msg.size() != recv_data.datapack_received_length_ - sizeof(aris::core::MsgHeader)) {
+								ARIS_LOG(WEBSOCKET_RECEIVE_WRONG_MSG_SIZE, recv_msg.size(), recv_data.datapack_received_length_);
+								break;
+							}
+
+							if (on_receive_msg_)
+								on_receive_msg_(socket_server_, recv_sock, recv_msg);
+
+							recv_data.datapack_received_length_ = 0;
+						}
+
+						// 本帧已经收取完毕，准备下一帧
+						if (recv_data.received_length_ >= recv_data.required_length_) {
+							std::copy_n(recv_data.mem_.data() + recv_data.required_length_, recv_data.received_length_ - recv_data.required_length_, recv_data.mem_.data());
+							recv_data.received_length_ -= recv_data.required_length_;
+							recv_data.required_length_ = 2;
+						}
+					}
+					return ret;
+				}
+
 				break;
 			}
 			case Type::WEB_RAW: {
@@ -1895,57 +1960,6 @@ namespace aris::core{
 						continue;
 					}
 #endif
-
-					if (imp->type_ == Type::WEB || imp->type_ == Type::WEB_RAW) {
-						char recv_data[1024]{ 0 };
-						int res = ::recv(recv_sock, recv_data, 1024, 0);
-						if (res <= 0) {
-							ARIS_LOG(WEBSOCKET_SHAKE_HAND_FAILED, res);
-							imp->sock_datas_.erase(recv_sock);
-							continue;
-						}
-
-						auto header_map = make_header_map2(recv_data);
-						std::string server_key;
-						try {
-							server_key = header_map.at("Sec-WebSocket-Key");
-						}
-						catch (std::exception&) {
-							ARIS_LOG(WEBSOCKET_SHAKE_HAND_FAILED_INVALID_KEY);
-							imp->sock_datas_.erase(recv_sock);
-							continue;
-						}
-						server_key += "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-
-						// 找到返回的key //
-						SHA1 checksum;
-						checksum.update(server_key);
-						std::string hash = checksum.final();
-
-						std::uint32_t message_digest[5]{};
-						for (Size i = 0; i < 20; ++i) {
-							char num[5] = "0x00";
-							std::copy_n(hash.data() + i * 2, 2, num + 2);
-							std::uint8_t n = std::stoi(num, 0, 16);
-							*(reinterpret_cast<unsigned char*>(message_digest) + i) = n;
-						}
-
-						auto ret_hey = base64_encode2_2(reinterpret_cast<const unsigned char*>(message_digest), 20);
-
-						std::string shake_hand;
-						shake_hand = "HTTP/1.1 101 Switching Protocols\r\n"
-							"Upgrade: websocket\r\n"
-							"Connection: Upgrade\r\n"
-							"Sec-WebSocket-Accept: " + ret_hey + std::string("\r\n\r\n");
-
-						auto ret = aris_send(recv_sock, shake_hand.c_str(), static_cast<int>(shake_hand.size()), 0);
-
-						if (ret == -1) {
-							ARIS_LOG(WEBSOCKET_SHAKE_HAND_FAILED_LOOSE_CONNECTION);
-							imp->sock_datas_.erase(recv_sock);
-							continue;
-						};
-					}
 
 					// CALL BACK //
 					if (imp->on_receive_connection_) {
@@ -2182,19 +2196,19 @@ namespace aris::core{
 		switch (imp_->state_) {
 		case State::WORKING: {
 			switch (imp_->type_) {
-			case Type::TCP:
-				if (auto ret = aris_send(sock, reinterpret_cast<const char*>(&data.header()), data.size() + sizeof(MsgHeader), 0); ret < 0) {
+			case Type::TCP: {
+				auto ret = aris_send(sock, reinterpret_cast<const char*>(&data.header()), data.size() + sizeof(MsgHeader), 0);
+				if (ret < 0)
 					ARIS_LOG(SOCKET_SERVER_SEND_MSG_ERROR, ret);
-					return ret;
-				}
-				break;
+				return ret;
+			
+			}
 			case Type::WEB: {
 				auto packed_data = pack_data_server2(reinterpret_cast<const char*>(&data.header()), data.size() + sizeof(aris::core::MsgHeader));
-				if (auto ret = aris_send(sock, packed_data.data(), static_cast<int>(packed_data.size()), 0); ret < 0) {
+				auto ret = aris_send(sock, packed_data.data(), static_cast<int>(packed_data.size()), 0);
+				if (ret < 0)
 					ARIS_LOG(SOCKET_SERVER_SEND_MSG_ERROR, ret);
-					return ret;
-				}
-				break;
+				return ret;
 			}
 			case Type::UDP: {
 				memset(&imp_->server_addr_, 0, sizeof(imp_->server_addr_));

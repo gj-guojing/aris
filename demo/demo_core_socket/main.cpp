@@ -255,6 +255,7 @@ auto test4() -> void {
 #define PORT "5866"
 auto test5() {
 	SERVER_SOCKET server("server");
+	server.setConnectType(SERVER_SOCKET::Type::WEB);
 
 	server.setOnReceivedConnection([](SERVER_SOCKET* server, aris::core::SOCKET_T sock, const char* remote_ip, int port)->int {
 		std::cout << "server receive connnection from " + std::string(remote_ip) + " : " + std::to_string(port) << std::endl;
@@ -302,6 +303,7 @@ auto test5() {
 		th[i] = std::thread([i, num_send]()->void {
 			const std::string& cname = "client-" + std::to_string(i);
 			CLIENT_SOCKET client(cname, REMOTE_IP, PORT);
+			client.setConnectType(CLIENT_SOCKET::Type::WEB);
 			client.setOnReceivedConnection([cname](CLIENT_SOCKET* sock, const char* remote_ip, int port)->int {
 				std::cout << cname + " is connected" << std::endl;
 				return 0;
@@ -320,7 +322,7 @@ auto test5() {
 				return 0;
 				});
 
-			client.setConnectTimeoutMs(200);
+			client.setConnectTimeoutMs(1000000);
 			client.connect(REMOTE_IP, PORT);
 
 			for (int j = 0; j < num_send / 2; ++j) {
