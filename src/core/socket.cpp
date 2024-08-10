@@ -812,27 +812,29 @@ namespace aris::core{
 		if ((imp_->recv_socket_ = socket(AF_INET, sock_type, 0)) < 0)THROW_FILE_LINE("Socket can't connect, because can't socket\n");
 
 #ifdef UNIX
-		// Set the option active //
-		int keepAlive = 1; // 开启keepalive属性
-		int keepIdle = 5; // 如该连接在5秒内没有任何数据往来,则进行探测 
-		int keepInterval = 1; // 探测时发包的时间间隔为5 秒
-		int keepCount = 5; // 探测尝试的次数.如果第1次探测包就收到响应了,则后2次的不再发.
+		if (sock_type == SOCK_STREAM) {
+			// Set the option active //
+			int keepAlive = 1; // 开启keepalive属性
+			int keepIdle = 5; // 如该连接在5秒内没有任何数据往来,则进行探测 
+			int keepInterval = 1; // 探测时发包的时间间隔为5 秒
+			int keepCount = 5; // 探测尝试的次数.如果第1次探测包就收到响应了,则后2次的不再发.
 
-		if (setsockopt(imp_->recv_socket_, SOL_SOCKET, SO_KEEPALIVE, (void*)&keepAlive, sizeof(keepAlive)) < 0) {
-			aris_close(imp_->recv_socket_);
-			THROW_FILE_LINE("socket setsockopt SO_KEEPALIVE FAILED");
-		}
-		if (setsockopt(imp_->recv_socket_, IPPROTO_TCP, TCP_KEEPIDLE, (void*)&keepIdle, sizeof(keepIdle)) < 0) {
-			aris_close(imp_->recv_socket_);
-			THROW_FILE_LINE("socket setsockopt TCP_KEEPIDLE FAILED");
-		}
-		if (setsockopt(imp_->recv_socket_, IPPROTO_TCP, TCP_KEEPINTVL, (void*)&keepInterval, sizeof(keepInterval)) < 0) {
-			aris_close(imp_->recv_socket_);
-			THROW_FILE_LINE("socket setsockopt TCP_KEEPINTVL FAILED");
-		}
-		if (setsockopt(imp_->recv_socket_, IPPROTO_TCP, TCP_KEEPCNT, (void*)&keepCount, sizeof(keepCount)) < 0) {
-			aris_close(imp_->recv_socket_);
-			THROW_FILE_LINE("socket setsockopt TCP_KEEPCNT FAILED");
+			if (setsockopt(imp_->recv_socket_, SOL_SOCKET, SO_KEEPALIVE, (void*)&keepAlive, sizeof(keepAlive)) < 0) {
+				aris_close(imp_->recv_socket_);
+				THROW_FILE_LINE("socket setsockopt SO_KEEPALIVE FAILED");
+			}
+			if (setsockopt(imp_->recv_socket_, IPPROTO_TCP, TCP_KEEPIDLE, (void*)&keepIdle, sizeof(keepIdle)) < 0) {
+				aris_close(imp_->recv_socket_);
+				THROW_FILE_LINE("socket setsockopt TCP_KEEPIDLE FAILED");
+			}
+			if (setsockopt(imp_->recv_socket_, IPPROTO_TCP, TCP_KEEPINTVL, (void*)&keepInterval, sizeof(keepInterval)) < 0) {
+				aris_close(imp_->recv_socket_);
+				THROW_FILE_LINE("socket setsockopt TCP_KEEPINTVL FAILED");
+			}
+			if (setsockopt(imp_->recv_socket_, IPPROTO_TCP, TCP_KEEPCNT, (void*)&keepCount, sizeof(keepCount)) < 0) {
+				aris_close(imp_->recv_socket_);
+				THROW_FILE_LINE("socket setsockopt TCP_KEEPCNT FAILED");
+			}
 		}
 #endif
 
