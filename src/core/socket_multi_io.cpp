@@ -1682,6 +1682,8 @@ namespace aris::core{
 			required_length_ = 2;
 			received_length_ = 0;
 			is_first = false;
+
+			return ret;
 		}
 
 		// RAII to close sock
