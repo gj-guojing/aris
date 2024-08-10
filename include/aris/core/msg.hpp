@@ -69,6 +69,15 @@ namespace aris::core
 
 		auto toString()const->std::string { return std::string(data(), size()); }
 
+		auto setDestinationSockaddrin(void* sockaddr_in) -> void;
+		auto destinationSockaddrin()const -> void*;
+		auto destinationIpStr()const->std::string;
+		auto destinationPort()const-> int;
+		auto setSourceSockaddrin(void* sockaddr_in) -> void;
+		auto sourceSockaddrin()const -> void*;
+		auto sourceIpStr()const-> std::string;
+		auto sourcePort()const -> int;
+
 	protected:
 		virtual ~MsgBase() = default;
 		MsgBase() = default;

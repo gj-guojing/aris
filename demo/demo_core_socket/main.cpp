@@ -297,7 +297,7 @@ auto test5() {
 
 	server.startServer(PORT);
 
-	constexpr int num_clients{ 1 }, num_send{ 6 };
+	constexpr int num_clients{ 10 }, num_send{ 16 };
 	std::thread th[num_clients];
 	for (int i = 0; i < num_clients; ++i) {
 		th[i] = std::thread([i, num_send]()->void {
@@ -325,22 +325,196 @@ auto test5() {
 			client.setConnectTimeoutMs(1000000);
 			client.connect(REMOTE_IP, PORT);
 
+			//aris::core::Msg msg;
+			//msg.resize(0x200000);
+			//client.sendMsg(msg);
+			
+
+			
 			for (int j = 0; j < num_send / 2; ++j) {
-				client.sendMsg(aris::core::Msg(std::to_string(i)));
-				std::this_thread::sleep_for(std::chrono::seconds(1));
+				client.sendMsg(aris::core::Msg(std::to_string(j)));
 			}
 
-
+			std::this_thread::sleep_for(std::chrono::seconds(1));
 			client.stop();
-			std::cout << "before connect" << std::endl;
-			client.connect();
-			std::cout << "after connect" << std::endl;
+			});
+	}
+
+	for (int i = 0; i < num_clients; ++i)
+		th[i].join();
+
+
+	std::cout << "finished" << std::endl;
+}
+
+auto test6() {
+	auto server_type = SERVER_SOCKET::Type::TCP_RAW;
+	auto client_type = CLIENT_SOCKET::Type::TCP_RAW;
+
+	SERVER_SOCKET server("server");
+	server.setConnectType(server_type);
+
+	server.setOnReceivedConnection([](SERVER_SOCKET* server, aris::core::SOCKET_T sock, const char* remote_ip, int port)->int {
+		std::cout << "server receive connnection from " + std::string(remote_ip) + " : " + std::to_string(port) << std::endl;
+		return 0;
+		});
+	server.setOnLoseConnection([](SERVER_SOCKET* server, aris::core::SOCKET_T sock)->int {
+		std::cout << "server lose connection" << std::endl;
+		return 0;
+		});
+	server.setOnReceivedRawData([](SERVER_SOCKET* server, aris::core::SOCKET_T sock, const char* data, int size)->int {
+		std::cout << "server recv " + std::to_string(size) + " bytes raw data " +/*"from "+sock->remoteIP()+":"+sock->port()+*/" -- " + std::string(data, size) << std::endl;
+		return 0;
+		});
+	server.setOnReceivedMsg([](SERVER_SOCKET* server, aris::core::SOCKET_T sock, aris::core::Msg& msg)->int {
+		std::cout << "server recv " + std::to_string(msg.size()) + " bytes msg " + "from "+msg.sourceIpStr()+":"+std::to_string(msg.sourcePort())+" -- " + msg.toString() << std::endl;
+		// server->sendMsg(sock, aris::core::Msg(std::to_string(2*std::stoi(msg.toString()))));
+		return 0;
+		});
+
+	// SERVER_SOCKET server("server");
+
+	// server.setOnReceivedConnection([](SERVER_SOCKET *server, const char *remote_ip, int port)->int {
+	// 	std::cout << "server receive connnection from "+std::string(remote_ip)+" : "+std::to_string(port) << std::endl;
+	// 	return 0;
+	// });
+	// server.setOnLoseConnection([](SERVER_SOCKET *server)->int {
+	// 	std::cout << "server lose connection" << std::endl;
+	// 	return 0;
+	// });
+	// server.setOnReceivedRawData([](SERVER_SOCKET *server, const char *data, int size)->int {
+	// 	std::cout << "server recv "+std::to_string(size)+" bytes raw data "+/*"from "+sock->remoteIP()+":"+sock->port()+*/" -- " + std::string(data, size) << std::endl;
+	// 	return 0;
+	// });
+	// server.setOnReceivedMsg([](aris::core::SOCKET_T sock, aris::core::Msg &msg)->int {
+	// 	std::cout << "server recv "+std::to_string(msg.size())+" bytes msg "+/*"from "+sock->remoteIP()+":"+sock->port()+*/" -- " + msg.toString() << std::endl;
+	// 	// server->sendMsg(aris::core::Msg(std::to_string(2*std::stoi(msg.toString()))));
+	// 	return 0;
+	// });
+
+	server.startServer(PORT);
+
+	constexpr int num_clients{ 10 }, num_send{ 16 };
+	std::thread th[num_clients];
+	for (int i = 0; i < num_clients; ++i) {
+		th[i] = std::thread([i, num_send, client_type]()->void {
+			const std::string& cname = "client-" + std::to_string(i);
+			CLIENT_SOCKET client(cname, REMOTE_IP, PORT);
+			client.setConnectType(client_type);
+			client.setOnReceivedConnection([cname](CLIENT_SOCKET* sock, const char* remote_ip, int port)->int {
+				std::cout << cname + " is connected" << std::endl;
+				return 0;
+				});
+			client.setOnLoseConnection([cname](CLIENT_SOCKET* sock)->int {
+				std::cout << cname + " lose connection" << std::endl;
+				return 0;
+				});
+			client.setOnReceivedRawData([cname](CLIENT_SOCKET* sock, const char* data, int size)->int {
+				std::cout << cname + " recv " + std::to_string(size) + " bytes raw data " + "from " + sock->remoteIP() + ":" + sock->port() + " -- " + std::string(data, size) << std::endl;
+				return 0;
+				});
+			client.setOnReceivedMsg([i, cname](CLIENT_SOCKET* sock, aris::core::Msg& msg)->int {
+				std::cout << cname + " recv " + std::to_string(msg.size()) + " bytes msg " + "from " + msg.sourceIpStr() + ":" + sock->port() + " -- " + msg.toString() << std::endl;
+				assert(2 * i == std::stoi(msg.toString()));
+				return 0;
+				});
+
+			client.setConnectTimeoutMs(1000000);
+			client.connect(REMOTE_IP, PORT);
+
+			//aris::core::Msg msg;
+			//msg.resize(0x200000);
+			//client.sendMsg(msg);
+
+
 
 			for (int j = 0; j < num_send / 2; ++j) {
-				client.sendMsg(aris::core::Msg(std::to_string(i)));
-				std::this_thread::sleep_for(std::chrono::seconds(1));
+				std::string s = "sending:" + std::to_string(j);
+				client.sendRawData(s.data(), s.size());
+				//client.sendMsg(aris::core::Msg(s));
 			}
 
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+			client.stop();
+			});
+	}
+
+	for (int i = 0; i < num_clients; ++i)
+		th[i].join();
+
+
+	std::cout << "finished" << std::endl;
+}
+
+auto test_sock(SERVER_SOCKET::Type server_type, CLIENT_SOCKET::Type client_type) {
+
+	SERVER_SOCKET server("server");
+	server.setConnectType(server_type);
+
+	server.setOnReceivedConnection([](SERVER_SOCKET* server, aris::core::SOCKET_T sock, const char* remote_ip, int port)->int {
+		std::cout << "server receive connnection from " + std::string(remote_ip) + " : " + std::to_string(port) << std::endl;
+		return 0;
+		});
+	server.setOnLoseConnection([](SERVER_SOCKET* server, aris::core::SOCKET_T sock)->int {
+		std::cout << "server lose connection" << std::endl;
+		return 0;
+		});
+	server.setOnReceivedMsg([](SERVER_SOCKET* server, aris::core::SOCKET_T sock, aris::core::Msg& msg)->int {
+		std::cout << "server recv " + std::to_string(msg.size()) + " bytes msg " + "from " + msg.sourceIpStr() + ":" + std::to_string(msg.sourcePort()) + " -- " + msg.toString() << std::endl;
+		server->sendMsg(sock, aris::core::Msg(std::to_string(2*std::stoi(msg.toString()))));
+		return 0;
+		});
+
+	server.startServer(PORT);
+
+	constexpr int num_clients{ 10 }, num_send{ 16 };
+	std::thread th[num_clients];
+	for (int i = 0; i < num_clients; ++i) {
+		th[i] = std::thread([i, num_send, client_type]()->void {
+			const std::string& cname = "client-" + std::to_string(i);
+			CLIENT_SOCKET client(cname, REMOTE_IP, PORT);
+			client.setConnectType(client_type);
+			client.setOnReceivedConnection([cname](CLIENT_SOCKET* sock, const char* remote_ip, int port)->int {
+				std::cout << cname + " is connected" << std::endl;
+				return 0;
+				});
+			client.setOnLoseConnection([cname](CLIENT_SOCKET* sock)->int {
+				std::cout << cname + " lose connection" << std::endl;
+				return 0;
+				});
+			client.setOnReceivedRawData([cname](CLIENT_SOCKET* sock, const char* data, int size)->int {
+				std::cout << cname + " recv " + std::to_string(size) + " bytes raw data " + "from " + sock->remoteIP() + ":" + sock->port() + " -- " + std::string(data, size) << std::endl;
+				return 0;
+				});
+			client.setOnReceivedMsg([i, cname](CLIENT_SOCKET* sock, aris::core::Msg& msg)->int {
+				std::cout << cname + " recv " + std::to_string(msg.size()) + " bytes msg " + "from " + msg.sourceIpStr() + ":" + sock->port() + " -- " + msg.toString() << std::endl;
+				assert(2 * i == std::stoi(msg.toString()));
+				return 0;
+				});
+
+			client.setConnectTimeoutMs(1000000);
+			client.connect(REMOTE_IP, PORT);
+
+			for (int j = 0; j < num_send / 2; ++j) {
+				std::string s = std::to_string(i);
+				if (client.connectType() == CLIENT_SOCKET::Type::TCP ||
+					client.connectType() == CLIENT_SOCKET::Type::UDP ||
+					client.connectType() == CLIENT_SOCKET::Type::WEB
+					) {
+					
+					client.sendMsg(aris::core::Msg(s));
+				
+				}
+				else {
+					client.sendRawData(s.data(), s.size());
+				
+				}
+				
+				//client.sendRawData(s.data(), s.size());
+				//client.sendMsg(aris::core::Msg(s));
+			}
+
+			std::this_thread::sleep_for(std::chrono::seconds(1));
 			client.stop();
 			});
 	}
@@ -356,8 +530,19 @@ int main(){
 	//test2();
 	//test3();
 	//test4();
-	test5();
-
+	//test6();
+	//std::cout << std::endl << std::endl << "-------------- test TCP ----------------------" << std::endl << std::endl;
+	//test_sock(SERVER_SOCKET::Type::TCP, CLIENT_SOCKET::Type::TCP);
+	//std::cout << std::endl << std::endl << "-------------- test TCP_RAW ----------------------" << std::endl << std::endl;
+	//test_sock(SERVER_SOCKET::Type::TCP_RAW, CLIENT_SOCKET::Type::TCP_RAW);
+	//std::cout << std::endl << std::endl << "-------------- test WEB ----------------------" << std::endl << std::endl;
+	//test_sock(SERVER_SOCKET::Type::WEB, CLIENT_SOCKET::Type::WEB);
+	//std::cout << std::endl << std::endl << "-------------- test WEB_RAW ----------------------" << std::endl << std::endl;
+	//test_sock(SERVER_SOCKET::Type::WEB_RAW, CLIENT_SOCKET::Type::WEB_RAW);
+	//std::cout << std::endl << std::endl << "-------------- test UDP ----------------------" << std::endl << std::endl;
+	//test_sock(SERVER_SOCKET::Type::UDP, CLIENT_SOCKET::Type::UDP);
+	std::cout << std::endl << std::endl << "-------------- test UDP_RAW ----------------------" << std::endl << std::endl;
+	test_sock(SERVER_SOCKET::Type::UDP_RAW, CLIENT_SOCKET::Type::UDP_RAW);
 	return 0;
 }
 
