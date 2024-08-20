@@ -2203,6 +2203,7 @@ namespace aris::core{
 			case Type::TCP: {
 				aris::core::Msg send_msg = data;
 				send_msg.setDestinationSockaddrin(&imp_->sock_datas_.at(sock).remote_addr_);
+				send_msg.setSourceSockaddrin(&imp_->sock_datas_.at(sock).local_addr_);
 				auto ret = aris_send(sock, reinterpret_cast<const char*>(&send_msg.header()), send_msg.size() + sizeof(MsgHeader), 0);
 				if (ret < 0)
 					ARIS_LOG(SOCKET_SERVER_SEND_MSG_ERROR, ret);
@@ -2212,6 +2213,7 @@ namespace aris::core{
 			case Type::WEB: {
 				aris::core::Msg send_msg = data;
 				send_msg.setDestinationSockaddrin(&imp_->sock_datas_.at(sock).remote_addr_);
+				send_msg.setSourceSockaddrin(&imp_->sock_datas_.at(sock).local_addr_);
 				auto packed_data = pack_data_server2(reinterpret_cast<const char*>(&send_msg.header()), send_msg.size() + sizeof(aris::core::MsgHeader));
 				auto ret = aris_send(sock, packed_data.data(), static_cast<int>(packed_data.size()), 0);
 				if (ret < 0)
@@ -2219,9 +2221,12 @@ namespace aris::core{
 				return ret;
 			}
 			case Type::UDP: {
-				const struct sockaddr_in* addr = (data.destinationIpStr() == "0.0.0.0") ? &imp_->client_addr_ : (const struct sockaddr_in*)data.destinationSockaddrin();
+				aris::core::Msg send_msg = data;
+				send_msg.setSourceSockaddrin(&imp_->sock_datas_.at(sock).local_addr_);
 
-				if (sendto(sock, reinterpret_cast<const char*>(&data.header()), data.size() + sizeof(MsgHeader), 0, (const struct sockaddr*)addr, sizeof(imp_->client_addr_)) == -1)
+				const struct sockaddr_in* addr = (send_msg.destinationIpStr() == "0.0.0.0") ? &imp_->client_addr_ : (const struct sockaddr_in*)send_msg.destinationSockaddrin();
+
+				if (sendto(sock, reinterpret_cast<const char*>(&send_msg.header()), send_msg.size() + sizeof(MsgHeader), 0, (const struct sockaddr*)addr, sizeof(imp_->client_addr_)) == -1)
 					THROW_FILE_LINE("SocketMultiIo failed sending data, because network failed\n");
 				else
 					return 0;
