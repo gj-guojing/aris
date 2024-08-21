@@ -3197,7 +3197,6 @@ namespace aris::dynamic{
 	//    y : y
 	//    z : z
 	//    p : 4 维向量， p1 x + p2 y + p3 z + p4 = 0，其中 p1 p2 p3 为单位向量
-	// tau2 : max(n,m) x 1
 	auto inline s_interp_plane(Size n, const double *x, const double *y, const double *z, double *plane_func)->void {
 		double avg_x{ 0.0 }, avg_y{ 0.0 }, avg_z{ 0.0 };
 
