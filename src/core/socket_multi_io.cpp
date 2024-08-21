@@ -1768,7 +1768,7 @@ namespace aris::core{
 						aris::core::Msg recv_msg;
 						recv_msg.resize(recv_data.required_length_ - sizeof(MsgHeader));
 						std::copy(recv_data.mem_.data(), recv_data.mem_.data() + recv_msg.size() + sizeof(MsgHeader), (char*)(&recv_msg.header()));
-						recv_msg.setSourceSockaddrin(&recv_data.remote_addr_);
+						recv_msg.setRemoteSockaddrin(&recv_data.remote_addr_);
 
 						if(on_receive_msg_)
 							on_receive_msg_(socket_server_, recv_data.sock_, recv_msg);
@@ -1787,8 +1787,8 @@ namespace aris::core{
 
 				aris::core::Msg msg;
 				msg.copy(recv_data.mem_.data(), recv_data.received_length_);
-				msg.setSourceSockaddrin(&recv_data.remote_addr_);
-				msg.setDestinationSockaddrin(&recv_data.local_addr_);
+				msg.setRemoteSockaddrin(&recv_data.remote_addr_);
+				//msg.setDestinationSockaddrin(&recv_data.local_addr_);
 
 				// 触发回调 //
 				if (on_receive_msg_)
@@ -1814,7 +1814,7 @@ namespace aris::core{
 						aris::core::Msg recv_msg;
 						recv_msg.resize(static_cast<aris::core::MsgSize>(recv_data.datapack_received_length_ - sizeof(aris::core::MsgHeader)));
 						std::copy_n(recv_data.datapack_mem_.data(), recv_data.datapack_received_length_, reinterpret_cast<char*>(&recv_msg.header()));
-						recv_msg.setSourceSockaddrin(&recv_data.remote_addr_);
+						recv_msg.setRemoteSockaddrin(&recv_data.remote_addr_);
 
 						if (recv_msg.size() != recv_data.datapack_received_length_ - sizeof(aris::core::MsgHeader)) {
 							ARIS_LOG(WEBSOCKET_RECEIVE_WRONG_MSG_SIZE, recv_msg.size(), recv_data.datapack_received_length_);
@@ -1847,8 +1847,8 @@ namespace aris::core{
 					for (state = recv_data.unpackWebData(); state == 0; state = recv_data.unpackWebData()) {
 						aris::core::Msg msg;
 						msg.copy(recv_data.datapack_mem_.data(), recv_data.datapack_received_length_);
-						msg.setSourceSockaddrin(&recv_data.remote_addr_);
-						msg.setDestinationSockaddrin(&recv_data.local_addr_);
+						msg.setRemoteSockaddrin(&recv_data.remote_addr_);
+						//msg.setDestinationSockaddrin(&recv_data.local_addr_);
 						
 						// 触发回调 //
 						if (on_receive_msg_)
@@ -1876,7 +1876,7 @@ namespace aris::core{
 				}
 
 				if (ret > 0 && on_receive_msg_) {
-					recv_msg.setSourceSockaddrin(&client_addr_);
+					recv_msg.setRemoteSockaddrin(&client_addr_);
 					on_receive_msg_(socket_server_, recv_data.sock_, recv_msg);
 					return ret;
 				}
@@ -1891,7 +1891,7 @@ namespace aris::core{
 				int ret = recvfrom(recv_data.sock_, recv_msg.data(), 1024, 0, (struct sockaddr*)(&client_addr_), &sin_size);
 
 				if (ret > 0 && on_receive_msg_) {
-					recv_msg.setSourceSockaddrin(&client_addr_);
+					recv_msg.setRemoteSockaddrin(&client_addr_);
 					recv_msg.resize(ret);
 					on_receive_msg_(socket_server_, recv_data.sock_, recv_msg);
 					return ret;
@@ -2202,8 +2202,8 @@ namespace aris::core{
 			switch (imp_->type_) {
 			case Type::TCP: {
 				aris::core::Msg send_msg = data;
-				send_msg.setDestinationSockaddrin(&imp_->sock_datas_.at(sock).remote_addr_);
-				send_msg.setSourceSockaddrin(&imp_->sock_datas_.at(sock).local_addr_);
+				send_msg.setRemoteSockaddrin(&imp_->sock_datas_.at(sock).remote_addr_);
+				//send_msg.setSourceSockaddrin(&imp_->sock_datas_.at(sock).local_addr_);
 				auto ret = aris_send(sock, reinterpret_cast<const char*>(&send_msg.header()), send_msg.size() + sizeof(MsgHeader), 0);
 				if (ret < 0)
 					ARIS_LOG(SOCKET_SERVER_SEND_MSG_ERROR, ret);
@@ -2212,8 +2212,8 @@ namespace aris::core{
 			}
 			case Type::WEB: {
 				aris::core::Msg send_msg = data;
-				send_msg.setDestinationSockaddrin(&imp_->sock_datas_.at(sock).remote_addr_);
-				send_msg.setSourceSockaddrin(&imp_->sock_datas_.at(sock).local_addr_);
+				send_msg.setRemoteSockaddrin(&imp_->sock_datas_.at(sock).remote_addr_);
+				//send_msg.setSourceSockaddrin(&imp_->sock_datas_.at(sock).local_addr_);
 				auto packed_data = pack_data_server2(reinterpret_cast<const char*>(&send_msg.header()), send_msg.size() + sizeof(aris::core::MsgHeader));
 				auto ret = aris_send(sock, packed_data.data(), static_cast<int>(packed_data.size()), 0);
 				if (ret < 0)
@@ -2222,9 +2222,9 @@ namespace aris::core{
 			}
 			case Type::UDP: {
 				aris::core::Msg send_msg = data;
-				send_msg.setSourceSockaddrin(&imp_->sock_datas_.at(sock).local_addr_);
+				//send_msg.setSourceSockaddrin(&imp_->sock_datas_.at(sock).local_addr_);
 
-				const struct sockaddr_in* addr = (send_msg.destinationIpStr() == "0.0.0.0") ? &imp_->client_addr_ : (const struct sockaddr_in*)send_msg.destinationSockaddrin();
+				const struct sockaddr_in* addr = (send_msg.remoteIpStr() == "0.0.0.0") ? &imp_->client_addr_ : (const struct sockaddr_in*)send_msg.remoteSockaddrin();
 
 				if (sendto(sock, reinterpret_cast<const char*>(&send_msg.header()), send_msg.size() + sizeof(MsgHeader), 0, (const struct sockaddr*)addr, sizeof(imp_->client_addr_)) == -1)
 					THROW_FILE_LINE("SocketMultiIo failed sending data, because network failed\n");
@@ -2249,7 +2249,7 @@ namespace aris::core{
 				break;
 			}
 			case Type::UDP_RAW: {
-				const struct sockaddr_in* addr = (data.destinationIpStr() == "0.0.0.0") ? &imp_->client_addr_ : (const struct sockaddr_in*)data.destinationSockaddrin();
+				const struct sockaddr_in* addr = (data.remoteIpStr() == "0.0.0.0") ? &imp_->client_addr_ : (const struct sockaddr_in*)data.remoteSockaddrin();
 
 				if (sendto(sock, data.data(), data.size(), 0, (const struct sockaddr*)addr, sizeof(imp_->client_addr_)) == -1)
 					THROW_FILE_LINE("SocketServer failed sending data, because network failed\n");

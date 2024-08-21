@@ -149,12 +149,67 @@ auto test_singular_processor_1()->void {
 
 }
 
+auto test_smooth() -> void {
+	//struct SmoothParam {
+	//	double dt;
+	//	int dim;
+	//	const double* min_dp, * max_dp, * min_d2p, * max_d2p, * min_d3p, * max_d3p;
+	//	double ds1, ds2, ds3;
+	//	double* p0, * p1, * p2, * p3;
 
+	//	double target_ds;
+	//};
+	//struct SmoothRet {
+	//	double next_ds;
+	//};
+
+	const double dt = 0.001;
+
+	double a0 = 5.0;
+	double v0 = 1.0 - a0 * dt * 2;
+	double v1 = v0 + a0 * dt;
+	double v2 = v1 + a0 * dt;
+
+	double pos0 = 0.0;
+	double pos1 = pos0 + v0 * dt;
+	double pos2 = pos1 + v1 * dt;
+	double pos3 = pos2 + v2 * dt;
+
+
+	const int dim = 1;
+
+	double min_dp[dim]{ -0.25 };
+	double max_dp[dim]{ 2.25 };
+	double min_d2p[dim]{ -5.0 };
+	double max_d2p[dim]{ 5.0 };
+	double min_d3p[dim]{ -10.0 };
+	double max_d3p[dim]{ 10.0 };
+	
+	double p0[dim]{ pos0 };
+	double p1[dim]{ pos1 };
+	double p2[dim]{ pos2 };
+	double p3[dim]{ pos3 };
+
+	SmoothParam p{
+		dt,
+		dim,
+		min_dp, max_dp, min_d2p, max_d2p, min_d3p, max_d3p,
+		0.1, 0.1, 0.1,
+		p0, p1, p2, p3,
+		1.0
+	};
+
+	SmoothRet ret;
+
+	s_smooth_curve2(p, ret);
+
+}
 
 
 void test_singular_processor(){
 	std::cout << std::endl << "-----------------test processor---------------------" << std::endl;
 
+	test_smooth();
 	test_singular_processor_1();
 
 	std::cout << "-----------------test processor finished------------" << std::endl << std::endl;

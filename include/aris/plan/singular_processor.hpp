@@ -82,7 +82,19 @@ namespace aris::plan{
 	};
 
 
+	struct SmoothParam {
+		double dt;
+		int dim;
+		const double* min_dp, * max_dp, * min_d2p, * max_d2p, * min_d3p, * max_d3p;
+		double ds1, ds2, ds3;
+		double* p0, * p1, * p2, * p3;
 
+		double target_ds;
+	};
+	struct SmoothRet {
+		double next_ds;
+	};
+	auto ARIS_API s_smooth_curve2(const SmoothParam& param, SmoothRet& ret) -> int;
 
 }
 

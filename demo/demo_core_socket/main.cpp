@@ -367,7 +367,7 @@ auto test6() {
 		return 0;
 		});
 	server.setOnReceivedMsg([](SERVER_SOCKET* server, aris::core::SOCKET_T sock, aris::core::Msg& msg)->int {
-		std::cout << "server recv " + std::to_string(msg.size()) + " bytes msg " + "from "+msg.sourceIpStr()+":"+std::to_string(msg.sourcePort())+" -- " + msg.toString() << std::endl;
+		std::cout << "server recv " + std::to_string(msg.size()) + " bytes msg " + "from "+msg.remoteIpStr()+":"+std::to_string(msg.remotePort())+" -- " + msg.toString() << std::endl;
 		// server->sendMsg(sock, aris::core::Msg(std::to_string(2*std::stoi(msg.toString()))));
 		return 0;
 		});
@@ -414,7 +414,7 @@ auto test6() {
 				return 0;
 				});
 			client.setOnReceivedMsg([i, cname](CLIENT_SOCKET* sock, aris::core::Msg& msg)->int {
-				std::cout << cname + " recv " + std::to_string(msg.size()) + " bytes msg " + "from " + msg.sourceIpStr() + ":" + sock->port() + " -- " + msg.toString() << std::endl;
+				std::cout << cname + " recv " + std::to_string(msg.size()) + " bytes msg " + "from " + msg.remoteIpStr() + ":" + sock->port() + " -- " + msg.toString() << std::endl;
 				assert(2 * i == std::stoi(msg.toString()));
 				return 0;
 				});
@@ -452,15 +452,15 @@ auto test_sock(SERVER_SOCKET::Type server_type, CLIENT_SOCKET::Type client_type)
 	server.setConnectType(server_type);
 
 	server.setOnReceivedConnection([](SERVER_SOCKET* server, aris::core::SOCKET_T sock, const char* remote_ip, int port)->int {
-		std::cout << "server receive connnection from " + std::string(remote_ip) + " : " + std::to_string(port) << std::endl;
+		ARIS_COUT << "server receive connnection from " + std::string(remote_ip) + " : " + std::to_string(port) << std::endl;
 		return 0;
 		});
 	server.setOnLoseConnection([](SERVER_SOCKET* server, aris::core::SOCKET_T sock)->int {
-		std::cout << "server lose connection" << std::endl;
+		ARIS_COUT << "server lose connection" << std::endl;
 		return 0;
 		});
 	server.setOnReceivedMsg([](SERVER_SOCKET* server, aris::core::SOCKET_T sock, aris::core::Msg& msg)->int {
-		std::cout << "server recv " + std::to_string(msg.size()) + " bytes msg " + "from " + msg.sourceIpStr() + ":" + std::to_string(msg.sourcePort()) + " -- " + msg.toString() << std::endl;
+		ARIS_COUT << "server recv " + std::to_string(msg.size()) + " bytes msg " + "from " + msg.remoteIpStr() + ":" + std::to_string(msg.remotePort()) + " -- " + msg.toString() << std::endl;
 		server->sendMsg(sock, aris::core::Msg(std::to_string(2*std::stoi(msg.toString()))));
 		return 0;
 		});
@@ -475,19 +475,19 @@ auto test_sock(SERVER_SOCKET::Type server_type, CLIENT_SOCKET::Type client_type)
 			CLIENT_SOCKET client(cname, REMOTE_IP, PORT);
 			client.setConnectType(client_type);
 			client.setOnReceivedConnection([cname](CLIENT_SOCKET* sock, const char* remote_ip, int port)->int {
-				std::cout << cname + " is connected" << std::endl;
+				ARIS_COUT << cname + " is connected" << std::endl;
 				return 0;
 				});
 			client.setOnLoseConnection([cname](CLIENT_SOCKET* sock)->int {
-				std::cout << cname + " lose connection" << std::endl;
+				ARIS_COUT << cname + " lose connection" << std::endl;
 				return 0;
 				});
 			client.setOnReceivedRawData([cname](CLIENT_SOCKET* sock, const char* data, int size)->int {
-				std::cout << cname + " recv " + std::to_string(size) + " bytes raw data " + "from " + sock->remoteIP() + ":" + sock->port() + " -- " + std::string(data, size) << std::endl;
+				ARIS_COUT << cname + " recv " + std::to_string(size) + " bytes raw data " + "from " + sock->remoteIP() + ":" + sock->port() + " -- " + std::string(data, size) << std::endl;
 				return 0;
 				});
 			client.setOnReceivedMsg([i, cname](CLIENT_SOCKET* sock, aris::core::Msg& msg)->int {
-				std::cout << cname + " recv " + std::to_string(msg.size()) + " bytes msg " + "from " + msg.sourceIpStr() + ":" + sock->port() + " -- " + msg.toString() << std::endl;
+				ARIS_COUT << cname + " recv " + std::to_string(msg.size()) + " bytes msg " + "from " + msg.remoteIpStr() + ":" + sock->port() + " -- " + msg.toString() << std::endl;
 				assert(2 * i == std::stoi(msg.toString()));
 				return 0;
 				});

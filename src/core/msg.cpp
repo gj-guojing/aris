@@ -47,29 +47,41 @@ namespace aris::core
 		std::copy_n(data() + at_this_pos_of_msg, std::min(data_size, size() - at_this_pos_of_msg), static_cast<char*>(tar));
 	}
 
-	auto MsgBase::setDestinationSockaddrin(void* sockaddr_in) -> void {
-		std::copy_n((char*)sockaddr_in, 16, (char*)&header().msg_type_);
-	}
-	auto MsgBase::destinationSockaddrin()const -> void* {
-		return (void*)&header().msg_type_;
-	}
-	auto MsgBase::destinationIpStr()const -> std::string {
-		return std::string(inet_ntoa(reinterpret_cast<const struct sockaddr_in*>(destinationSockaddrin())->sin_addr));
-	}
-	auto MsgBase::destinationPort()const -> int {
-		return ntohs(reinterpret_cast<const struct sockaddr_in*>(destinationSockaddrin())->sin_port);
-	}
-	auto MsgBase::setSourceSockaddrin(void* sockaddr_in) -> void {
+	//auto MsgBase::setDestinationSockaddrin(void* sockaddr_in) -> void {
+	//	std::copy_n((char*)sockaddr_in, 16, (char*)&header().msg_type_);
+	//}
+	//auto MsgBase::destinationSockaddrin()const -> void* {
+	//	return (void*)&header().msg_type_;
+	//}
+	//auto MsgBase::destinationIpStr()const -> std::string {
+	//	return std::string(inet_ntoa(reinterpret_cast<const struct sockaddr_in*>(destinationSockaddrin())->sin_addr));
+	//}
+	//auto MsgBase::destinationPort()const -> int {
+	//	return ntohs(reinterpret_cast<const struct sockaddr_in*>(destinationSockaddrin())->sin_port);
+	//}
+	//auto MsgBase::setSourceSockaddrin(void* sockaddr_in) -> void {
+	//	std::copy_n((char*)sockaddr_in, 16, (char*)&header().reserved2_);
+	//}
+	//auto MsgBase::sourceSockaddrin()const -> void* {
+	//	return (void*)&header().reserved2_;
+	//}
+	//auto MsgBase::sourceIpStr()const -> std::string {
+	//	return std::string(inet_ntoa(reinterpret_cast<const struct sockaddr_in*>(sourceSockaddrin())->sin_addr));
+	//}
+	//auto MsgBase::sourcePort()const -> int {
+	//	return ntohs(reinterpret_cast<const struct sockaddr_in*>(sourceSockaddrin())->sin_port);
+	//}
+	auto MsgBase::setRemoteSockaddrin(void* sockaddr_in) -> void {
 		std::copy_n((char*)sockaddr_in, 16, (char*)&header().reserved2_);
 	}
-	auto MsgBase::sourceSockaddrin()const -> void* {
+	auto MsgBase::remoteSockaddrin()const -> void* {
 		return (void*)&header().reserved2_;
 	}
-	auto MsgBase::sourceIpStr()const -> std::string {
-		return std::string(inet_ntoa(reinterpret_cast<const struct sockaddr_in*>(sourceSockaddrin())->sin_addr));
+	auto MsgBase::remoteIpStr()const -> std::string {
+		return std::string(inet_ntoa(reinterpret_cast<const struct sockaddr_in*>(remoteSockaddrin())->sin_addr));
 	}
-	auto MsgBase::sourcePort()const -> int {
-		return ntohs(reinterpret_cast<const struct sockaddr_in*>(sourceSockaddrin())->sin_port);
+	auto MsgBase::remotePort()const -> int {
+		return ntohs(reinterpret_cast<const struct sockaddr_in*>(remoteSockaddrin())->sin_port);
 	}
 
 	auto Msg::swap(Msg &other)->void { std::swap(data_, other.data_); std::swap(capacity_, other.capacity_); }
