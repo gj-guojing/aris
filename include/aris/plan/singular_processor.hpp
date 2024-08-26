@@ -27,9 +27,10 @@ namespace aris::plan{
 		// 需要设置模型、TG、电机的最大速度与最大加速度
 		auto setModel(aris::dynamic::ModelBase& model)->void;
 		auto setTrajectoryGenerator(TrajectoryGenerator& tg)->void;
-		auto setMaxVels(const double* max_vels)->void;
-		auto setMaxAccs(const double* max_accs)->void;
-		auto setMaxJerks(const double* max_jerks) -> void;
+		auto setMaxPoss(const double* max_poss, const double *min_poss = nullptr) -> void;
+		auto setMaxVels(const double* max_vels, const double* min_vels = nullptr)->void;
+		auto setMaxAccs(const double* max_accs, const double* min_accs = nullptr)->void;
+		auto setMaxJerks(const double* max_jerks, const double* min_jerks = nullptr) -> void;
 		auto init()->void;
 		
 		// 设置速度百分比，类似 TG 中 setTargetDs
@@ -85,7 +86,8 @@ namespace aris::plan{
 	struct SmoothParam {
 		double dt;
 		int dim;
-		const double* min_dp, * max_dp, * min_d2p, * max_d2p, * min_d3p, * max_d3p;
+		const double* min_p, * max_p, * min_dp, * max_dp, * min_d2p, * max_d2p, * min_d3p, * max_d3p;
+		double min_ds, max_ds, min_d2s, max_d2s, min_d3s, max_d3s;
 		double ds1, ds2, ds3;
 		double* p0, * p1, * p2, * p3;
 

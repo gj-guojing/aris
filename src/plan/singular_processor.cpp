@@ -853,16 +853,13 @@ namespace aris::plan {
 
 		double zero_check = 1e-10;
 
-		const double MAX_DS = 1.0;
-		const double MIN_DS = std::min(0.005, param.target_ds);
-		const double MAX_D2S = 10.0;
-		const double MIN_D2S = -10.0;
-		const double MAX_D3S = 10000.0;
-		const double MIN_D3S = -10000.0;
+		const double MAX_DS = std::max(param.max_ds, param.target_ds);
+		const double MIN_DS = std::min(param.min_ds, param.target_ds);
+		const double MAX_D2S = param.max_d2s;
+		const double MIN_D2S = param.min_d2s;
+		const double MAX_D3S = param.max_d3s;
+		const double MIN_D3S = param.min_d3s;
 
-		//const double VEL_BOUND_RATIO = 0.99;
-		//const double ACC_BOUND_RATIO = 0.95;
-		//const double JERK_BOUND_RATIO = 0.95;
 		const double VEL_BOUND_RATIO = 1.0;
 		const double ACC_BOUND_RATIO = 1.0;
 		const double JERK_BOUND_RATIO = 1.0;
@@ -881,6 +878,8 @@ namespace aris::plan {
 		auto p1 = param.p1;
 		auto p0 = param.p0;
 
+		auto p_max = param.max_p;
+		auto p_min = param.min_p;
 		auto dp_max = param.max_dp;
 		auto dp_min = param.min_dp;
 		auto d2p_max = param.max_d2p;
@@ -897,15 +896,74 @@ namespace aris::plan {
 		double d3s_t15 = d3s3;
 		double ds_t25 = ds3;
 
-		double d3s_min_1 = -1e10;
-		double d3s_max_1 = 1e10;
-		double d3s_min_2 = -1e10;
-		double d3s_max_2 = 1e10;
-		double d3s_min_3 = -1e10;
-		double d3s_max_3 = 1e10;
-		double d3s_min_4 = -1e10;
-		double d3s_max_4 = 1e10;
+		auto d3s_max_level_11 = 1.0;
 
+		//% 【LEVEL 0】p不超边界，v,a,j超边界
+		//%  -- COND 0.1 下一时刻的位置满足条件
+		//%     lhs_01 = (p_min - e1)/f1
+		//%     rhs_01 = (p_max - e1)/f1
+		//%
+		//% 【LEVEL 1】p,v不超边界，a,j超边界
+		//%  -- COND 1.0 下一时刻的ds满足条件
+		//%     lhs_10 = (ds_min - ds3 - d2s3*dt)/dt^2
+		//%     rhs_10 = (ds_max - ds3 - d2s3*dt)/dt^2
+		//%
+		//%  -- COND 1.1 下一时刻的速度满足条件
+		//%     lhs_11 = (dp_min - e2)/f2
+		//%     rhs_11 = (dp_max - e2)/f2
+		//% 
+		//% 【LEVEL 2】p,v,a不超边界，j超边界
+		//%  -- COND 2.0 下一时刻的d2s满足条件
+		//%     lhs_20 = (d2s_min - d2s3)/dt
+		//%     rhs_20 = (d2s_max - d2s3)/dt
+		//%
+		//%  -- COND 2.1 下一时刻的加速度满足条件 
+		//%     lhs_21 = (d2p_min - e3)/f3
+		//%     rhs_21 = (d2p_max - e3)/f3
+		//%
+		//%  -- COND 2.2 加速度不超的前提下，当前速度不能太快，否则未来位置可能超出边界
+		//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%tbd
+		//%
+		//% 【LEVEL 3】p,v,a,j不超边界
+		//%  -- COND 3.0 下一时刻的d3s满足条件
+		//%     lhs_30 = d3s_min
+		//%     rhs_30 = d3s_max
+		//%
+		//%  -- COND 3.1 d3s不超的前提下，当前d2s不能太快，否则未来d3s可能超出边界
+		//%     value1 = ((d3s_min^2*dt^2)/16 + 2*d3s_min*ds3 - 2*d3s_min*ds_max + (d2s3*d3s_min*dt)/2)
+		//%     value2 = ((d3s_max^2*dt^2)/16 + 2*d3s_max*ds3 - 2*d3s_max*ds_min + (d2s3*d3s_max*dt)/2)
+		//%     lhs_31 = -sqrt(value1) + d3s_min*dt/4
+		//%     rhs_31 =  sqrt(value2) + d3s_max*dt/4
+		//%
+		//%  -- COND 3.2 下一时刻的跃度满足条件
+		//%     lhs_32 = (d3p_min - e4)/f4
+		//%     rhs_32 = (d3p_max - e4)/f4
+		//%
+		//%  -- COND 3.3 跃度不超的前提下，当前加速度不能太快，否则未来速度可能超出边界
+		//%     value2 = ((d3p_max^2*dt^2)/16 + 2*d3p_max*dp3 - 2*d3p_max*dp_min + (d2p3*d3p_max*dt)/2)
+		//%     value1 = ((d3p_min^2*dt^2)/16 + 2*d3p_min*dp3 - 2*d3p_min*dp_max + (d2p3*d3p_min*dt)/2)
+		//%     lhs_33 = -sqrt(value1) + d3p_max*dt/4
+		//%     rhs_33 =  sqrt(value2) + d3p_min*dt/4
+		//%
+		//%  -- COND 3.4 跃度不超的前提下，当前速度不能太快，否则未来位置可能超出边界
+		//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%tbd
+		
+		double level31_value1 = ((MIN_D3S * MIN_D3S * dt * dt) / 16 + 2 * MIN_D3S * ds3 - 2 * MIN_D3S * MAX_DS + (d2s3 * MIN_D3S * dt) / 2);
+		double level31_value2 = ((MAX_D3S * MAX_D3S * dt * dt) / 16 + 2 * MAX_D3S * ds3 - 2 * MAX_D3S * MIN_DS + (d2s3 * MAX_D3S * dt) / 2);
+		double 
+			lhs01{ -1e10 }, rhs01{ 1e10 },
+			lhs10{ (MIN_DS - ds3 - d2s3 * dt)/dt/dt }, rhs10{ (MAX_DS - ds3 - d2s3 * dt)/dt/dt },
+			lhs11{ -1e10 }, rhs11{ 1e10 },
+			lhs20{ (MIN_D2S - d2s3) / dt }, rhs20{ (MAX_D2S - d2s3) / dt },
+			lhs21{ -1e10 }, rhs21{ 1e10 },
+			lhs22{ -1e10 }, rhs22{ 1e10 },
+			lhs30{ MIN_D3S }, rhs30{ MAX_D3S },
+			lhs31{ std::sqrt(std::max(0.0, level31_value1)) + MIN_D3S*dt/4 }, rhs31{ -std::sqrt(std::max(0.0, level31_value2)) + MAX_D3S * dt / 4 },
+			lhs32{ -1e10 }, rhs32{ 1e10 },
+			lhs33{ -1e10 }, rhs33{ 1e10 },
+			lhs34{ -1e10 }, rhs34{ 1e10 }
+		;
+		
 		for (int i = 0; i < dim; ++i) {
 			auto dp3 = (p3[i] - p2[i]) / dt;
 			auto dp2 = (p2[i] - p1[i]) / dt;
@@ -929,83 +987,66 @@ namespace aris::plan {
 			auto d2p_ds2_t25 = d2p_ds2_t15 + d3p_ds3_t15 * s25_s15;
 			auto dp_ds_t25 = dp_ds_t15 + d2p_ds2_t15 * s25_s15 + 0.5 * d3p_ds3_t15 * s25_s15 * s25_s15;
 
-			double k = (dp_ds_t25 + (3 * d2p_ds2_t25 * ds_t25 * dt) / 2);
-			double g = d3p_ds3_t25 * ds_t25 * ds_t25 * ds_t25 + 3 * d2p_ds2_t25 * ds3 * d2s3;
+			auto k = (dp_ds_t25 + (3 * d2p_ds2_t25 * ds_t25 * dt) / 2);
+			auto g = d3p_ds3_t25 * ds_t25 * ds_t25 * ds_t25 + 3 * d2p_ds2_t25 * ds3 * d2s3;
+
+			auto f1 = k * dt * dt * dt;
+			auto f2 = k * dt * dt;
+			auto f3 = k * dt;
+			auto f4 = k;
+			auto e1 = p3[i] + dp3 * dt + d2p3 * dt * dt + g * dt * dt * dt;
+			auto e2 = dp3 + d2p3 * dt + g * dt * dt;
+			auto e3 = d2p3 + g * dt;
+			auto e4 = g;
 
 			if (std::abs(k) > zero_check) {
-				auto d3s_l1 = (-dp_max[i] * VEL_BOUND_RATIO - dp3 - d2p3 * dt - g * dt * dt) / k / dt / dt;
-				auto d3s_r1 = (dp_max[i] * VEL_BOUND_RATIO - dp3 - d2p3 * dt - g * dt * dt) / k / dt / dt;
+				auto lhs01_local = (p_min[i] - e1) / f2;
+				auto rhs01_local = (p_max[i] - e2) / f2;
 
-				auto d3s_l2 = (-d2p_max[i] * ACC_BOUND_RATIO - d2p3 - g * dt) / k / dt;
-				auto d3s_r2 = (d2p_max[i] * ACC_BOUND_RATIO - d2p3 - g * dt) / k / dt;
+				auto lhs11_local = (dp_min[i] * VEL_BOUND_RATIO - e2) / f2;
+				auto rhs11_local = (dp_max[i] * VEL_BOUND_RATIO - e2) / f2;
 
-				auto d3s_l3 = (-d3p_max[i] * JERK_BOUND_RATIO - g) / k;
-				auto d3s_r3 = (d3p_max[i] * JERK_BOUND_RATIO - g) / k;
+				auto lhs21_local = (d2p_min[i] * ACC_BOUND_RATIO - e3) / f3;
+				auto rhs21_local = (d2p_max[i] * ACC_BOUND_RATIO - e3) / f3;
 
-				auto value1 = ((d3p_min[i] * d3p_min[i] * dt * dt) / 16 + 2 * d3p_min[i] * dp3 - 2 * d3p_min[i] * dp_max[i] + (d2p3 * d3p_min[i] * dt) / 2);
-				auto d2p_max3 = std::sqrt(std::max(value1, 0.0)) + d3p_min[i] * dt / 4;
-				auto value2 = ((d3p_max[i] * d3p_max[i] * dt * dt) / 16 + 2 * d3p_max[i] * dp3 - 2 * d3p_max[i] * dp_min[i] + (d2p3 * d3p_max[i] * dt) / 2);
-				auto d2p_min3 = -std::sqrt(std::max(value2, 0.0)) + d3p_max[i] * dt / 4;
-				auto d3s_l4 = (d2p_min3 - d2p3 - g * dt) / k / dt;
-				auto d3s_r4 = (d2p_max3 - d2p3 - g * dt) / k / dt;
+				auto lhs32_local = (d3p_min[i] * JERK_BOUND_RATIO - e4) / f4;
+				auto rhs32_local = (d3p_max[i] * JERK_BOUND_RATIO - e4) / f4;
 
-				//std::cout << d2p_max3 << std::endl;
-				//std::cout << d2p_min3 << std::endl;
+				auto value2 = ((d3p_min[i] * d3p_min[i] * dt * dt) / 16 + 2 * d3p_min[i] * dp3 - 2 * d3p_min[i] * dp_max[i] + (d2p3 * d3p_min[i] * dt) / 2);
+				auto d2p_max3 = std::sqrt(std::max(value2, 0.0)) + d3p_min[i] * dt / 4;
+				auto value1 = ((d3p_max[i] * d3p_max[i] * dt * dt) / 16 + 2 * d3p_max[i] * dp3 - 2 * d3p_max[i] * dp_min[i] + (d2p3 * d3p_max[i] * dt) / 2);
+				auto d2p_min3 = -std::sqrt(std::max(value1, 0.0)) + d3p_max[i] * dt / 4;
+				auto lhs33_local = (d2p_min3 - d2p3 - g * dt) / k / dt;
+				auto rhs33_local = (d2p_max3 - d2p3 - g * dt) / k / dt;
 
 				if (k < 0) {
-					std::swap(d3s_l1, d3s_r1);
-					std::swap(d3s_l2, d3s_r2);
-					std::swap(d3s_l3, d3s_r3);
-					std::swap(d3s_l4, d3s_r4);
+					std::swap(lhs11_local, rhs11_local);
+					std::swap(lhs21_local, rhs21_local);
+					std::swap(lhs32_local, rhs32_local);
+					std::swap(lhs33_local, rhs33_local);
 				}
 
-				d3s_min_1 = std::max(d3s_l1, d3s_min_1);
-				d3s_max_1 = std::min(d3s_r1, d3s_max_1);
-				d3s_min_2 = std::max(d3s_l2, d3s_min_2);
-				d3s_max_2 = std::min(d3s_r2, d3s_max_2);
-				d3s_min_3 = std::max(d3s_l3, d3s_min_3);
-				d3s_max_3 = std::min(d3s_r3, d3s_max_3);
-				d3s_min_4 = std::max(d3s_l4, d3s_min_4);
-				d3s_max_4 = std::min(d3s_r4, d3s_max_4);
-
+				lhs11 = std::max(lhs11_local, lhs11);
+				rhs11 = std::min(rhs11_local, rhs11);
+				lhs21 = std::max(lhs21_local, lhs21);
+				rhs21 = std::min(rhs21_local, rhs21);
+				lhs32 = std::max(lhs32_local, lhs32);
+				rhs32 = std::min(rhs32_local, rhs32);
+				lhs33 = std::max(lhs32_local, lhs33);
+				rhs33 = std::min(rhs33_local, rhs33);
 			}
 		}
 
-		double d3s_min_12 = std::max({
-			d3s_min_1,
-			d3s_min_2,
-			});
-		double d3s_max_12 = std::min({
-			d3s_max_1,
-			d3s_max_2,
-			});
-		double d3s_min_124 = std::max({
-			d3s_min_1,
-			d3s_min_2,
-			d3s_min_4,
-			});
-		double d3s_max_124 = std::min({
-			d3s_max_1,
-			d3s_max_2,
-			d3s_max_4,
-			});
-		double d3s_min_all = std::max({
-			d3s_min_1,
-			d3s_min_2,
-			d3s_min_3,
-			d3s_min_4,
-			});
-		double d3s_max_all = std::min({
-			d3s_max_1,
-			d3s_max_2,
-			d3s_max_3,
-			d3s_max_4,
-			});
+		double lhs_level_0 = std::max({ lhs01 });
+		double rhs_level_0 = std::min({ rhs01 });
+		double lhs_level_1 = std::max({ lhs_level_0, lhs10, lhs11 });
+		double rhs_level_1 = std::min({ rhs_level_0, rhs10, rhs11 });
+		double lhs_level_2 = std::max({ lhs_level_1, lhs20, lhs21, lhs22 });
+		double rhs_level_2 = std::min({ rhs_level_1, rhs20, rhs21, rhs22 });
+		double lhs_level_3 = std::max({ lhs_level_2, lhs30, lhs31, lhs32, lhs33 });
+		double rhs_level_3 = std::min({ rhs_level_2, rhs30, rhs31, rhs32, rhs33 });
 
 		double next_ds, next_d2s, next_d3s{ 0.0 };
-
-		double d3s_max, d3s_min;
-
 		// 0. ds 过小、无法通过ds 判断出原始轨迹的曲率等
 		if (ds3 <= zero_check || ds2 < zero_check || ds1 < zero_check) {
 			aris::Size total_count;
@@ -1014,119 +1055,33 @@ namespace aris::plan {
 		}
 
 		// 1. 原始轨迹在起始点，可以直接加速到想要的 ds
-		if (d3s_max_all >= 1e9 && d3s_min_all < -1e9 && ds3 > zero_check) {
+		if (rhs_level_3 >= 1e9 && lhs_level_3 < -1e9 && ds3 > zero_check) {
 			next_ds = ds2 = ds3 = target_ds;
 			goto next_step;
 		}
 
-		// 2. 可以在COND 1234不超限的情况下，完成规划
-		d3s_max = d3s_max_all;
-		d3s_min = d3s_min_all;
-		if (d3s_max > d3s_min) {
-			bool is_avalable = false;
-			if (ds3 > 0.5) {
-				if (d2s3 > 0.0) {
-					// diff_ds = 0.5* d3s_min * T^2
-					// 
-					// T = d2s / d3s_min
-					// 
-					// => diff_ds = 0.5* d2s^2 / d3s_min
-					auto d3s_desired = ds3 < MAX_DS ? -d2s3 * d2s3 / ((MAX_DS - (ds3)) * 2.0) : 0.0;
-					is_avalable = d3s_desired > d3s_min;
-
-					//auto d2s_desired = std::sqrt(std::max(-d3s_min * (MAX_DS - (ds3 + d2s3 * dt + 0.5 * d3s_max * dt*dt))*2.0, 0.0));
-					//d3s_max = std::min(d3s_max, (d2s_desired - d2s3) / dt);
-				}
-				else {
-					is_avalable = true;
-				}
-			}
-			else {
-				if (d2s3 > 0.0) {
-					is_avalable = true;
-				}
-				else {
-					auto d3s_desired = ds3 > MIN_DS ? -d2s3 * d2s3 / ((MIN_DS - ds3) * 2.0) : 0.0;
-					is_avalable = d3s_desired < d3s_max;
-
-					//auto d2s_desired = -std::sqrt(std::max(-d3s_max * (MIN_DS - (ds3 + d2s3 * dt + 0.5 * d3s_min * dt * dt)) * 2.0, 0.0));
-					//d3s_min = std::max(d3s_min, (d2s_desired - d2s3) / dt);
-				}
-			}
-			if (is_avalable) {
-				aris::Size total_count;
-				s_follow_x(ds3, d2s3, target_ds, MAX_D2S, MIN_D2S, d3s_max, d3s_min, dt, zero_check, next_ds, next_d2s, next_d3s, total_count);
-				goto next_step;
-			}
+		// 2. 可以在 LEVEL-3 条件下完成规划
+		if (rhs_level_3 > lhs_level_3) {
+			aris::Size total_count;
+			s_follow_x(ds3, d2s3, target_ds, MAX_D2S, MIN_D2S, rhs_level_3, lhs_level_3, dt, zero_check, next_ds, next_d2s, next_d3s, total_count);
+			goto next_step;
 		}
 
-		// 3. 可以在COND 124不超限的情况下，完成规划
-		d3s_max = d3s_max_124;
-		d3s_min = d3s_min_124;
-		if (d3s_max > d3s_min) {
-			bool is_avalable = false;
-			if (ds3 > 0.5) {
-				if (d2s3 > 0.0) {
-					auto d3s_desired = ds3 < MAX_DS ? -d2s3 * d2s3 / ((MAX_DS - ds3) * 2.0) : 0.0;
-					is_avalable = d3s_desired > d3s_min;
-					d3s_max = std::min(d3s_desired, d3s_max);
-					//d3s_min = d3s_desired;
-				}
-				else {
-					is_avalable = true;
-				}
-			}
-			else {
-				if (d2s3 > 0.0) {
-					is_avalable = true;
-				}
-				else {
-					auto d3s_desired = ds3 > MIN_DS ? -d2s3 * d2s3 / ((MIN_DS - ds3) * 2.0) : 0.0;
-					is_avalable = d3s_desired < d3s_max;
-					//d3s_max = d3s_desired;
-					d3s_min = std::max(d3s_desired, d3s_min);
-				}
-			}
-			if (is_avalable) {
-				aris::Size total_count;
-				s_follow_x(ds3, d2s3, target_ds, MAX_D2S, MIN_D2S, d3s_max, d3s_min, dt, zero_check, next_ds, next_d2s, next_d3s, total_count);
-				goto next_step;
-			}
+		// 3. 可以在 LEVEL-2 条件下完成规划
+		if (rhs_level_2 > lhs_level_2) {
+			aris::Size total_count;
+			s_follow_x(ds3, d2s3, target_ds, MAX_D2S, MIN_D2S, rhs_level_2, lhs_level_2, dt, zero_check, next_ds, next_d2s, next_d3s, total_count);
+			goto next_step;
 		}
 
-		// 4. 可以在COND 12不超限的情况下，完成规划
-		d3s_max = d3s_max_12;
-		d3s_min = d3s_min_12;
-		if (d3s_max > d3s_min) {
-			bool is_avalable = false;
-			if (ds3 > 0.5) {
-				if (d2s3 > 0.0) {
-					auto d3s_desired = ds3 < MAX_DS ? -d2s3 * d2s3 / ((MAX_DS - ds3) * 2.0) : 0.0;
-					is_avalable = d3s_desired > d3s_min;
-					d3s_max = std::min(d3s_desired, d3s_max);
-				}
-				else {
-					is_avalable = true;
-				}
-			}
-			else {
-				if (d2s3 > 0.0) {
-					is_avalable = true;
-				}
-				else {
-					auto d3s_desired = ds3 > MIN_DS ? -d2s3 * d2s3 / ((MIN_DS - ds3) * 2.0) : 0.0;
-					is_avalable = d3s_desired < d3s_max;
-					d3s_min = std::max(d3s_desired, d3s_min);
-				}
-			}
-			if (is_avalable) {
-				aris::Size total_count;
-				s_follow_x(ds3, d2s3, target_ds, 1e9, -1e9, d3s_max, d3s_min, dt, zero_check, next_ds, next_d2s, next_d3s, total_count);
-				goto next_step;
-			}
+		// 4. 可以在 LEVEL-1 条件下完成规划
+		if (rhs_level_2 > lhs_level_2) {
+			aris::Size total_count;
+			s_follow_x(ds3, d2s3, target_ds, MAX_D2S, MIN_D2S, rhs_level_1, lhs_level_1, dt, zero_check, next_ds, next_d2s, next_d3s, total_count);
+			goto next_step;
 		}
 
-		// 5. 只考虑减速环节
+		// 5. 可以在 LEVEL-0 条件下完成规划
 		{
 			aris::Size total_count;
 			s_follow_x(ds3, d2s3, MIN_DS, MAX_D2S, MIN_D2S, MAX_D3S, MIN_D3S, dt, zero_check, next_ds, next_d2s, next_d3s, total_count);
@@ -1181,9 +1136,12 @@ namespace aris::plan {
 		aris::Size input_size_{ 0 };
 
 		std::vector<char> mem_;
-		double* max_vels_,
+		double
+			* max_poss_,
+			* max_vels_,
 			* max_accs_,
 			* max_jerks_,
+			* min_poss_,
 			* min_vels_,
 			* min_accs_,
 			* min_jerks_,
@@ -1233,21 +1191,31 @@ namespace aris::plan {
 		SingularState state_{ SingularState::NORMAL };
 
 	};
-	auto SingularProcessor::setMaxVels(const double* max_vels)->void {
+	auto SingularProcessor::setMaxPoss(const double* max_poss, const double* min_poss)->void {
+		std::copy(max_poss, max_poss + imp_->input_size_, imp_->max_poss_);
+		if (min_poss) {
+			std::copy(min_poss, min_poss + imp_->input_size_, imp_->min_poss_);
+		}
+		else {
+			for (int i = 0; i < imp_->input_size_; ++i)
+				imp_->min_poss_[i] = -imp_->min_poss_[i];
+		}
+	}
+	auto SingularProcessor::setMaxVels(const double* max_vels, const double* min_vels)->void {
 		std::copy(max_vels, max_vels + imp_->input_size_, imp_->max_vels_);
 		std::copy(max_vels, max_vels + imp_->input_size_, imp_->min_vels_);
 
 		for (int i = 0; i < imp_->input_size_; ++i)
 			imp_->min_vels_[i] = -imp_->min_vels_[i];
 	}
-	auto SingularProcessor::setMaxAccs(const double* max_accs)->void {
+	auto SingularProcessor::setMaxAccs(const double* max_accs, const double* min_accs)->void {
 		std::copy(max_accs, max_accs + imp_->input_size_, imp_->max_accs_);
 		std::copy(max_accs, max_accs + imp_->input_size_, imp_->min_accs_);
 
 		for (int i = 0; i < imp_->input_size_; ++i)
 			imp_->min_accs_[i] = -imp_->min_accs_[i];
 	}
-	auto SingularProcessor::setMaxJerks(const double* max_jerks) -> void {
+	auto SingularProcessor::setMaxJerks(const double* max_jerks, const double* min_jerks) -> void {
 		std::copy(max_jerks, max_jerks + imp_->input_size_, imp_->max_jerks_);
 		std::copy(max_jerks, max_jerks + imp_->input_size_, imp_->min_jerks_);
 
@@ -1265,9 +1233,11 @@ namespace aris::plan {
 		imp_->input_size_ = model.inputPosSize();
 
 		Size mem_size = 0;
+		core::allocMem(mem_size, imp_->max_poss_, imp_->input_size_);
 		core::allocMem(mem_size, imp_->max_vels_, imp_->input_size_);
 		core::allocMem(mem_size, imp_->max_accs_, imp_->input_size_);
 		core::allocMem(mem_size, imp_->max_jerks_, imp_->input_size_);
+		core::allocMem(mem_size, imp_->min_poss_, imp_->input_size_);
 		core::allocMem(mem_size, imp_->min_vels_, imp_->input_size_);
 		core::allocMem(mem_size, imp_->min_accs_, imp_->input_size_);
 		core::allocMem(mem_size, imp_->min_jerks_, imp_->input_size_);
@@ -1292,9 +1262,11 @@ namespace aris::plan {
 
 		imp_->mem_.resize(mem_size, char(0));
 
+		imp_->max_poss_ = core::getMem(imp_->mem_.data(), imp_->max_poss_);
 		imp_->max_vels_ = core::getMem(imp_->mem_.data(), imp_->max_vels_);
 		imp_->max_accs_ = core::getMem(imp_->mem_.data(), imp_->max_accs_);
 		imp_->max_jerks_ = core::getMem(imp_->mem_.data(), imp_->max_jerks_);
+		imp_->min_poss_ = core::getMem(imp_->mem_.data(), imp_->min_poss_);
 		imp_->min_vels_ = core::getMem(imp_->mem_.data(), imp_->min_vels_);
 		imp_->min_accs_ = core::getMem(imp_->mem_.data(), imp_->min_accs_);
 		imp_->min_jerks_ = core::getMem(imp_->mem_.data(), imp_->min_jerks_);
@@ -1394,13 +1366,14 @@ namespace aris::plan {
 			SmoothParam param{
 				imp_->tg_->dt(),
 				imp_->input_size_,
-				imp_->min_vels_, imp_->max_vels_, imp_->min_accs_, imp_->max_accs_, imp_->min_jerks_, imp_->max_jerks_,
+				nullptr, nullptr, imp_->min_vels_, imp_->max_vels_, imp_->min_accs_, imp_->max_accs_, imp_->min_jerks_, imp_->max_jerks_,
 				imp_->ds1_, imp_->ds2_, imp_->ds3_,
+				0.005,1.0,-10.0,10.0,-10000.0,10000.0,
 				imp_->p0_, imp_->p1_, imp_->p2_, imp_->p3_,
 				imp_->target_ds_
 			};
 			SmoothRet smooth_ret;
-			s_smooth_curve(param, smooth_ret);
+			s_smooth_curve2(param, smooth_ret);
 
 			imp_->tg_->setCurrentDs(smooth_ret.next_ds);
 			imp_->tg_->setCurrentDds(0.0);

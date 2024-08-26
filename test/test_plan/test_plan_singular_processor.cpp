@@ -178,6 +178,8 @@ auto test_smooth() -> void {
 
 	const int dim = 1;
 
+	double min_p[dim]{ -100 };
+	double max_p[dim]{ 100 };
 	double min_dp[dim]{ -0.25 };
 	double max_dp[dim]{ 2.25 };
 	double min_d2p[dim]{ -5.0 };
@@ -193,8 +195,9 @@ auto test_smooth() -> void {
 	SmoothParam p{
 		dt,
 		dim,
-		min_dp, max_dp, min_d2p, max_d2p, min_d3p, max_d3p,
+		max_p, min_p, min_dp, max_dp, min_d2p, max_d2p, min_d3p, max_d3p,
 		0.1, 0.1, 0.1,
+		0.005,1.0,-10,10,-10000,10000,
 		p0, p1, p2, p3,
 		1.0
 	};
