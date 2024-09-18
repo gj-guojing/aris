@@ -402,6 +402,16 @@ namespace aris::control{
 	private:
 		EthercatSlave *slave_{ nullptr };
 	};
+	
+	class ARIS_API EthercatCustomSlave : public CustomSlave {
+	public:
+		auto slave()->EthercatSlave* { return slave_; }
+		auto slave() const->const EthercatSlave* { return const_cast<std::decay_t<decltype(*this)> *>(this)->slave(); }
+		auto setSlave(EthercatSlave* slave)->void { slave_ = slave; }
+
+	private:
+		EthercatSlave *slave_{ nullptr };
+	};
 
 	auto inline createDefaultEthercatMaster(int motor_num, int io_num, int ft_sensor_num)->std::unique_ptr<EthercatMaster> {
 		auto mst = std::make_unique<EthercatMaster>();

@@ -149,19 +149,77 @@ auto test_singular_processor_1()->void {
 
 }
 
-auto test_smooth() -> void {
-	//struct SmoothParam {
-	//	double dt;
-	//	int dim;
-	//	const double* min_dp, * max_dp, * min_d2p, * max_d2p, * min_d3p, * max_d3p;
-	//	double ds1, ds2, ds3;
-	//	double* p0, * p1, * p2, * p3;
+auto test_smooth2() -> void {
+	auto func = [](double s, double* p)->int {
+		p[0] = s * s;
+		return 0;
+		};
 
-	//	double target_ds;
-	//};
-	//struct SmoothRet {
-	//	double next_ds;
-	//};
+	const double dt = 0.001;
+	const int dim = 1;
+
+	double min_p[dim]{ -100 };
+	double max_p[dim]{ 100 };
+	double min_dp[dim]{ -0.25 };
+	double max_dp[dim]{ 1.0 };
+	double min_d2p[dim]{ -2.0 };
+	double max_d2p[dim]{ 2.0 };
+	double min_d3p[dim]{ -10.0 };
+	double max_d3p[dim]{ 10.0 };
+
+	double p0[dim];
+	double p1[dim];
+	double p2[dim];
+	double p3[dim];
+
+	double s0 = 0.5 * dt * 0, s1 = 0.5 * dt * 1, s2 = 0.5 * dt * 2, s3 = 0.5 * dt * 3;
+
+	func(s0, p0);
+	func(s1, p1);
+	func(s2, p2);
+	func(s3, p3);
+
+	std::vector<double> poss{p0[0], p1[0], p2[0], p3[0]};
+	int n = 200;
+	for (int i = 0; i < n; ++i) {
+		SmoothParam p{
+			dt,
+			dim,
+			min_p, max_p, min_dp, max_dp, min_d2p, max_d2p, min_d3p, max_d3p,
+			0.005, 1.0, -1000, 1000, -100000, 1000000,
+			(s1-s0)/dt, (s2-s1)/dt, (s3-s2)/dt,
+			p0, p1, p2, p3,
+			1.0
+		};
+		SmoothRet ret;
+		s_smooth_curve2(p, ret);
+		
+		std::swap(p0[0], p1[0]);
+		std::swap(p1[0], p2[0]);
+		std::swap(p2[0], p3[0]);
+
+		std::swap(s0, s1);
+		std::swap(s1, s2);
+		std::swap(s2, s3);
+		
+		if (i == 100)
+			std::cout << "debug" << std::endl;	
+
+		s3 = s2 + ret.next_ds * dt;
+		func(s3, p3);
+
+		poss.push_back(p3[0]);
+	}
+
+	aris::dynamic::dlmwrite(n+4, 1, poss.data(), "C:\\Users\\py033\\Desktop\\test_data\\poss.txt");
+}
+
+
+auto test_smooth() -> void {
+	
+
+
+
 
 	const double dt = 0.001;
 
@@ -195,9 +253,9 @@ auto test_smooth() -> void {
 	SmoothParam p{
 		dt,
 		dim,
-		max_p, min_p, min_dp, max_dp, min_d2p, max_d2p, min_d3p, max_d3p,
+		min_p, max_p, min_dp, max_dp, min_d2p, max_d2p, min_d3p, max_d3p,
+		0.005, 1.0, -10, 10, -10000, 10000,
 		0.1, 0.1, 0.1,
-		0.005,1.0,-10,10,-10000,10000,
 		p0, p1, p2, p3,
 		1.0
 	};
@@ -212,7 +270,7 @@ auto test_smooth() -> void {
 void test_singular_processor(){
 	std::cout << std::endl << "-----------------test processor---------------------" << std::endl;
 
-	test_smooth();
+	test_smooth2();
 	test_singular_processor_1();
 
 	std::cout << "-----------------test processor finished------------" << std::endl << std::endl;

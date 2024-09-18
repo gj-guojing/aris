@@ -152,6 +152,13 @@ namespace aris::control{
 		virtual auto getFtData(double *data_address)->void = 0;
 	};
 
+	class ARIS_API CustomSlave {
+	public:
+		auto virtual init()->void {}
+		auto virtual readPdo()->void = 0;
+		auto virtual writePdo()->void = 0;
+	};
+
 	class ARIS_API Controller {
 	public:
 		auto virtual init()->void;
@@ -171,6 +178,10 @@ namespace aris::control{
 		auto resetFtSensorPool(aris::core::PointerArray<FtSensor> *pool);
 		auto ftSensorPool()->aris::core::PointerArray<FtSensor>&;
 		auto ftSensorPool()const->const aris::core::PointerArray<FtSensor>& { return const_cast<std::decay_t<decltype(*this)> *>(this)->ftSensorPool(); }
+
+		auto resetCustomSlavePool(aris::core::PointerArray<CustomSlave> *pool);
+		auto customSlavePool()->aris::core::PointerArray<CustomSlave>&;
+		auto customSlavePool()const->const aris::core::PointerArray<CustomSlave>& { return const_cast<std::decay_t<decltype(*this)> *>(this)->customSlavePool(); }
 
 		virtual ~Controller();
 		Controller(const std::string &name = "controller");

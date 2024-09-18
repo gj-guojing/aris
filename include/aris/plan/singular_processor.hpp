@@ -95,6 +95,7 @@ namespace aris::plan{
 	};
 	struct SmoothRet {
 		double next_ds;
+		int state;
 	};
 	auto ARIS_API s_smooth_curve2(const SmoothParam& param, SmoothRet& ret) -> int;
 

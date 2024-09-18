@@ -528,13 +528,19 @@ void test_follow_single_variable()
 		double pc = pa, vc =0, ac;
 		aris::Size total_count;
 
+		int i = 0;
 		while (std::abs(pt - pc) > zero_check) {
 
-			if (pc > 0.25 && vc > 3.3)
+			//if (pc > 0.25 && vc > 3.3)
+			//	std::cout << "debug" << std::endl;
+
+			if (i > 299)
 				std::cout << "debug" << std::endl;
 
 			aris::plan::s_follow_x(pa, va, pt, vmax, vmin, amax, amin, dt, zero_check, pc, vc, ac, total_count);
-			std::cout << "pos : " << pc << "   " << vc << "   " << ac << std::endl;
+			std::cout<<"time " << i << ":   " << "left count:"<< total_count << "  pos : " << pc << "   " << vc << "   " << ac << std::endl;
+			++i;
+
 
 
 			pa = pc;
@@ -573,8 +579,8 @@ void test_function()
 	std::cout << std::endl << "-----------------test function---------------------" << std::endl;
 	//test_optimal();
 	//test_moveAbsolute2();
-	test_s_is_in_vavg_boundage_1_dof();
-	test_s_is_in_vavg_boundage();
+	//test_s_is_in_vavg_boundage_1_dof();
+	//test_s_is_in_vavg_boundage();
 	test_follow_single_variable();
 	std::cout << "-----------------test function finished------------" << std::endl << std::endl;
 }
