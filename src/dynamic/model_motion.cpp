@@ -175,7 +175,7 @@ namespace aris::dynamic{
 		}
 	}
 	auto Motion::cptPError(const double* p1, const double* p2)->double {
-		return axis() > 2 ? s_put_into_period(*p1, (*p2)/2.0 / aris::PI, 2*aris::PI) - (*p2) : (*p1) - (*p2);
+		return std::abs(axis() > 2 ? s_put_into_period(*p1, (*p2)/2.0 / aris::PI, 2*aris::PI) - (*p2) : (*p1) - (*p2));
 	}
 	auto Motion::p() const noexcept->const double* { return &imp_->mp_;/*imp_->mp_ / imp_->mp_factor_ - imp_->mp_offset_;*/ }
 	auto Motion::updP() noexcept->void{

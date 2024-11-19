@@ -29,7 +29,7 @@ namespace aris::plan{
 		auto dt()const->double;
 		auto setDt(double dt)->void;
 
-		// 真实世界的时间间隔 //
+		// 最大的重规划点数 //
 		auto maxReplanNum()const->int;
 		auto setMaxReplanNum(int max_replan_num = 10) -> void;
 

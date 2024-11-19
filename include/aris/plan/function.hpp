@@ -211,15 +211,15 @@ namespace aris::plan
 			a_max_real = std::max(a_min, a_max_real);
 
 			// 【CASE 0】没有减速能力
-			if (va > 0 && a_min > -zero_check) {
-				ac = a_min;
+			if (va + a_max * dt > 0 && a_min > -zero_check) {
+				ac = va > 0.0 ? a_min : -va/dt;
 				vc = va + ac * dt;
 				pc = pa + vc * dt;
 				total_count = std::numeric_limits<std::decay_t<decltype(total_count)>>::max();
 				return 0;
 			}
-			if (va < 0 && a_max < zero_check) {
-				ac = a_max;
+			if (va + a_min * dt < 0 && a_max < zero_check) {
+				ac = va < 0.0 ? a_max : -va / dt;
 				vc = va + ac * dt;
 				pc = pa + vc * dt;
 				total_count = std::numeric_limits<std::decay_t<decltype(total_count)>>::max();
@@ -247,11 +247,10 @@ namespace aris::plan
 				const double vdec = va;
 				auto n = std::ceil(-vdec / a_min / dt - 1.0 - zero_check);
 				const double sdec = dt * n * (vdec + dt*(n + 1) / 2 * a_min);
-				if (vdec > 0 && pt - pa - sdec < zero_check) {
+				if (n > 0 && pt - pa - sdec < zero_check) {
 					ac = a_min;
 					vc = va + ac * dt;
 					pc = pa + vc * dt;
-					//total_count = n - 1;
 
 					double v1 = va + dt * a_min/2;
 
@@ -269,9 +268,6 @@ namespace aris::plan
 						total_count = (Tacc2 + Tdec2) / dt - 2;
 					}
 
-
-
-
 					return 0;
 				}
 			}
@@ -282,7 +278,7 @@ namespace aris::plan
 				const double vdec = va + a_max_real * dt;
 				auto n = std::ceil(-vdec / a_min / dt - 1.0 - zero_check);
 				const double sdec = dt * n * (vdec + dt * (n + 1) / 2 * a_min);
-				if (vdec < 0 || sdec < pt - (pa + (va + a_max_real * dt) * dt)) {
+				if (n < 0 || sdec < pt - (pa + (va + a_max_real * dt) * dt)) {
 					ac = a_max_real;
 					vc = va + ac * dt;
 					pc = pa + vc * dt;
@@ -350,13 +346,11 @@ namespace aris::plan
 				double n_ideal = (-3 + std::sqrt(std::max(9.0 - 4.0 * C, 0.0))) / 2.0;
 				const double ndec2 = n_ideal;  // 尽量加速稍微低一些
 
-
-
-				auto tn = std::ceil(n_ideal) * dt;
+				auto tn = std::ceil(n_ideal - zero_check) * dt;
 				double vn = (pt - pa + a_min * (tn * (tn + dt) / 2)) / (tn + dt);
 				double v_next = vn - tn * a_min;
 
-				std::cout << pt - pa - (v_next * dt + vn * dt + (v_next + vn) / 2 * (tn-dt)) << std::endl;
+				//std::cout << pt - pa - (v_next * dt + vn * dt + (v_next + vn) / 2 * (tn-dt)) << std::endl;
 
 				//double v_next = -(ndec2 + 1) * dt * a_min;
 				ac = (v_next - va) / dt;

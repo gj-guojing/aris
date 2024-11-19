@@ -98,7 +98,7 @@ namespace aris::plan{
 		int state;
 	};
 	auto ARIS_API s_smooth_curve2(const SmoothParam& param, SmoothRet& ret) -> int;
-
+	auto ARIS_API s_smooth_curve3(const SmoothParam& param, SmoothRet& ret) -> int;
 }
 
 #endif
