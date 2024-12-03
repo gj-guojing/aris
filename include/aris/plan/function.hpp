@@ -212,14 +212,14 @@ namespace aris::plan
 
 			// 【CASE 0】没有减速能力
 			if (va + a_max * dt > 0 && a_min > -zero_check) {
-				ac = va > 0.0 ? a_min : -va/dt;
+				ac = va > 0.0 ? a_min : std::max(-va / dt, a_min);
 				vc = va + ac * dt;
 				pc = pa + vc * dt;
 				total_count = std::numeric_limits<std::decay_t<decltype(total_count)>>::max();
 				return 0;
 			}
 			if (va + a_min * dt < 0 && a_max < zero_check) {
-				ac = va < 0.0 ? a_max : -va / dt;
+				ac = va < 0.0 ? a_max : std::min(-va/dt, a_max);
 				vc = va + ac * dt;
 				pc = pa + vc * dt;
 				total_count = std::numeric_limits<std::decay_t<decltype(total_count)>>::max();

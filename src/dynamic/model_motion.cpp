@@ -980,7 +980,7 @@ namespace aris::dynamic{
 		for (int i = 0; i < 3; ++i) {
 			max_error = std::max(max_error, std::abs(p1[i] - p2[i]));
 		}
-		max_error = std::max(max_error, s_put_into_period(std::abs(p1[3] - p2[3]), 0, 2*aris::PI));
+		max_error = std::max(max_error, std::abs(s_put_into_period(p1[3] - p2[3], 0, 2*aris::PI)));
 
 		return max_error;
 	}
@@ -1099,7 +1099,7 @@ namespace aris::dynamic{
 		for (int i = 0; i < 2; ++i) {
 			max_error = std::max(max_error, std::abs(p1[i] - p2[i]));
 		}
-		max_error = std::max(max_error, s_put_into_period(std::abs(p1[2] - p2[2]), 0, 2 * aris::PI));
+		max_error = std::max(max_error, std::abs(s_put_into_period(p1[2] - p2[2], 0, 2 * aris::PI)));
 
 		return max_error;
 	}

@@ -472,6 +472,34 @@ void test_s_is_in_vavg_boundage() {
 }
 void test_follow_single_variable()
 {
+	{
+		double pt = 0.4000078;
+		double vt = 0.0;
+		double at = 0.0;
+		double pa = 0.4;
+		double va = 1e-10;
+		double aa = 1.86295223741914;
+		double vm = 0.10297442; // 295.0 / 360 * 2 * aris::PI * 0.02
+		double am = 2.09439512; // 1500.0 / 360 * 2 * aris::PI *0.01
+
+		double vmax = 100;
+		double vmin = -50;
+
+		double amax = 60;
+		double amin = -40;
+
+		double dt = 1e-3;
+		double zero_check = 1e-10;
+		double pc = pa, vc, ac;
+		aris::Size total_count;
+		aris::plan::s_follow_x(pa, va, pt, vmax, vmin, amax, amin, dt, zero_check, pc, vc, ac, total_count);
+	}
+	
+	
+	
+	
+	
+	
 	/*
 	{
 		//0.4, 0.00186295223741914, 1.86295223741914, 0.4, 0.10297442, 2.09439512, 0.400000931476119, 0, -1.86295223741914, 1

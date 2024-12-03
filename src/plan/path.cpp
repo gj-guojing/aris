@@ -41,11 +41,19 @@ namespace aris::plan{
 
 		double ext[2]{};
 		if (auto ext_num = s_poly2_solve(A, B, C, ext); ext_num == 0) {
-		
-		
+			double lhs = -1.0, rhs = 1.0;
+			while (func(lhs) * func(rhs) > 0) {
+				lhs *= 2;
+				rhs *= 2;
+			}
+
+			x[0] = newton_raphson_binary_search(func, lhs, rhs);
+
+			return 1;
 		}
 		else if (ext_num == 1) {
-		
+			x[0] = ext[0];
+			return ext_num;
 		
 		}
 		else {

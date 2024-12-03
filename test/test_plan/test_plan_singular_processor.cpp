@@ -214,6 +214,124 @@ auto test_smooth2() -> void {
 	aris::dynamic::dlmwrite(n+4, 1, poss.data(), "C:\\Users\\py033\\Desktop\\test_data\\poss.txt");
 }
 
+struct TestSmoothParam {
+	int n;
+	int dim;
+	double dt;
+	std::function<void(double, double*)> f;
+	std::vector<double> max_p, min_p, max_dp, min_dp, max_d2p, min_d2p, max_d3p, min_d3p;
+	double s_begin;
+	double ds_begin;
+};
+struct TestSmoothResult {
+	std::vector<double> poss;
+	std::vector<double> max_p, max_dp, max_d2p, max_d3p, min_p, min_dp, min_d2p, min_d3p;
+	double s_end;
+};
+
+auto test_smooth_func(TestSmoothParam param) -> TestSmoothResult
+{
+	TestSmoothResult result;
+
+	auto dim = param.dim;
+	auto n = param.n;
+	auto dt = param.dt;
+	auto f = param.f;
+
+	result.max_p.resize(dim, std::numeric_limits<double>::min());
+	result.min_p.resize(dim, std::numeric_limits<double>::max());
+	result.max_dp.resize(dim, std::numeric_limits<double>::min());
+	result.min_dp.resize(dim, std::numeric_limits<double>::max());
+	result.max_d2p.resize(dim, std::numeric_limits<double>::min());
+	result.min_d2p.resize(dim, std::numeric_limits<double>::max());
+	result.max_d3p.resize(dim, std::numeric_limits<double>::min());
+	result.min_d3p.resize(dim, std::numeric_limits<double>::max());
+
+	std::vector<double> p0(dim), p1(dim), p2(dim), p3(dim);
+	double s0 = dt * 0, s1 = dt * 0.1, s2 = dt * 0.2, s3 = dt * 0.3;
+
+	f(s0, p0.data());
+	f(s1, p1.data());
+	f(s2, p2.data());
+	f(s3, p3.data());
+
+	result.poss.clear();
+	for (int i = 0; i < dim; ++i)
+		result.poss.push_back(p0[i]);
+	for (int i = 0; i < dim; ++i)
+		result.poss.push_back(p1[i]);
+	for (int i = 0; i < dim; ++i)
+		result.poss.push_back(p2[i]);
+	for (int i = 0; i < dim; ++i)
+		result.poss.push_back(p3[i]);
+
+	for (int i = 4; i < n; ++i) {
+		SmoothParam p{
+			dt,
+			dim,
+			param.min_p.data(), param.max_p.data(), 
+			param.min_dp.data(), param.max_dp.data(), 
+			param.min_d2p.data(), param.max_d2p.data(), 
+			param.min_d3p.data(), param.max_d3p.data(),
+			0.005, 1.0, -1000, 1000, -100000, 1000000,
+			(s1 - s0) / dt, (s2 - s1) / dt, (s3 - s2) / dt,
+			p0.data(), p1.data(), p2.data(), p3.data(),
+			1.0
+		};
+		SmoothRet ret;
+		s_smooth_curve3(p, ret);
+
+		
+		if (i > 1349 && i < 1360) {
+			std::cout << "count:" << i << "  ret:" << ret.state << std::endl;
+			std::cout << "debug" << std::endl;
+			std::cout << "ds:" << ret.next_ds << std::endl;
+			std::cout << std::endl;
+		}
+
+
+		std::swap(p0, p1);
+		std::swap(p1, p2);
+		std::swap(p2, p3);
+
+		std::swap(s0, s1);
+		std::swap(s1, s2);
+		std::swap(s2, s3);
+
+		s3 = s2 + ret.next_ds * dt;
+		f(s3, p3.data());
+
+		for (int i = 0; i < dim; ++i) {
+			result.poss.push_back(p3[i]);
+			
+			double dp0 = (p1[i] - p0[i]) / dt;
+			double dp1 = (p2[i] - p1[i]) / dt;
+			double dp2 = (p3[i] - p2[i]) / dt;
+
+			double d2p0 = (dp1 - dp0) / dt;
+			double d2p1 = (dp2 - dp1) / dt;
+
+			double d3p0 = (d2p1 - d2p0) / dt;
+
+			result.max_p[i] = std::max(result.max_p[i], p3[i]);
+			result.min_p[i] = std::min(result.min_p[i], p3[i]);
+			result.max_dp[i] = std::max(result.max_dp[i], dp2);
+			result.min_dp[i] = std::min(result.min_dp[i], dp2);
+			result.max_d2p[i] = std::max(result.max_d2p[i], d2p1);
+			result.min_d2p[i] = std::min(result.min_d2p[i], d2p1);
+			result.max_d3p[i] = std::max(result.max_d3p[i], d3p0);
+			result.min_d3p[i] = std::min(result.min_d3p[i], d3p0);
+		}
+			
+	}
+
+	result.s_end = s3;
+
+	return result;
+}
+
+
+
 // 
 auto test_smooth_cond_3_1() -> void {
 	auto func = [](double s, double* p)->int {
@@ -230,115 +348,40 @@ auto test_smooth_cond_3_1() -> void {
 		return 0;
 		};
 
-	const double dt = 0.001;
-	const int dim = 1;
+	TestSmoothParam param;
+	//param = TestSmoothParam {6000, 1, 0.01, func,
+	//	{100},{-100},{3.0},{-3.0},{3.0},{-3.0},{10.0},{-10.0},
+	//	0.0, 0.1
+	//};
+	param = TestSmoothParam{ 6000, 1, 0.001, func,
+	{100},{-100},{1.5},{-1.5},{10.0},{-10.0},{10.0},{-10.0},
+	0.0, 0.1
+	};
 
-	double min_p[dim]{ -100 };
-	double max_p[dim]{ 100 };
-	double min_dp[dim]{ -3.0 };
-	double max_dp[dim]{ 3.0 };
-	double min_d2p[dim]{ -3.0 };
-	double max_d2p[dim]{ 3.0 };
-	double min_d3p[dim]{ -10.0 };
-	double max_d3p[dim]{ 10.0 };
-
-	double p0[dim];
-	double p1[dim];
-	double p2[dim];
-	double p3[dim];
-
-	double s0 = dt * 0, s1 = dt * 1, s2 = dt * 2, s3 = dt * 3;
-
-	func(s0, p0);
-	func(s1, p1);
-	func(s2, p2);
-	func(s3, p3);
-
-	std::vector<double> poss{ p0[0], p1[0], p2[0], p3[0] };
 	int n = 6000;
-	for (int i = 0; i < n; ++i) {
-		SmoothParam p{
-			dt,
-			dim,
-			min_p, max_p, min_dp, max_dp, min_d2p, max_d2p, min_d3p, max_d3p,
-			0.005, 1.0, -1000, 1000, -100000, 1000000,
-			(s1 - s0) / dt, (s2 - s1) / dt, (s3 - s2) / dt,
-			p0, p1, p2, p3,
-			1.0
-		};
-		SmoothRet ret;
-		s_smooth_curve3(p, ret);
 
-		if (ret.state != 2) {
-			std::cout << "count:" << i << "  state:" << ret.state <<"  ds:" <<ret.next_ds << std::endl;
-		
-		}
+	auto result = test_smooth_func(param);
 
-		std::swap(p0[0], p1[0]);
-		std::swap(p1[0], p2[0]);
-		std::swap(p2[0], p3[0]);
-
-		std::swap(s0, s1);
-		std::swap(s1, s2);
-		std::swap(s2, s3);
+	std::cout << "s end:"<< result.s_end << std::endl;
+	std::cout << "max p:" << std::endl;
+	aris::dynamic::dsp(1, param.dim, result.max_p.data());
+	std::cout << "min p:" << std::endl;
+	aris::dynamic::dsp(1, param.dim, result.min_p.data());
+	std::cout << "max dp:" << std::endl;
+	aris::dynamic::dsp(1, param.dim, result.max_dp.data());
+	std::cout << "min dp:" << std::endl;
+	aris::dynamic::dsp(1, param.dim, result.min_dp.data());
+	std::cout << "max d2p:" << std::endl;
+	aris::dynamic::dsp(1, param.dim, result.max_d2p.data());
+	std::cout << "min d2p:" << std::endl;
+	aris::dynamic::dsp(1, param.dim, result.min_d2p.data());
+	std::cout << "max d3p:" << std::endl;
+	aris::dynamic::dsp(1, param.dim, result.max_d3p.data());
+	std::cout << "min d3p:" << std::endl;
+	aris::dynamic::dsp(1, param.dim, result.min_d3p.data());
 
 
-			
-
-		s3 = s2 + ret.next_ds * dt;	
-		func(s3, p3);
-
-		if (i < 1600 && i >= 1270) {
-			//std::cout << "debug" << std::endl;
-			//std::cout << s2 << "  " << ret.next_ds << std::endl;
-			
-			auto dp3 = (p3[0] - p2[0]) / dt;
-			auto dp2 = (p2[0] - p1[0]) / dt;
-			auto dp1 = (p1[0] - p0[0]) / dt;
-
-			auto d2p2 = (dp2 - dp1) / dt;
-			auto d2p3 = (dp3 - dp2) / dt;
-
-			auto d3p3 = (d2p3 - d2p2) / dt;
-
-			auto ds1 = s1 - s0;
-			auto ds2 = s2 - s1;
-			auto ds3 = s3 - s2;
-
-			auto d2s2 = (ds2 - ds1) / dt;
-			auto d2s3 = (ds3 - ds2) / dt;
-
-			auto d3s3 = (d2s3 - d2s2) / dt;
-
-
-			auto dp_t15 = dp2;
-			auto d2p_t15 = (d2p2 + d2p3) / 2;
-			auto d3p_t15 = d3p3;
-
-			double ds_t15 = ds2;
-			double d2s_t15 = (d2s2 + d2s3) / 2;
-			double d3s_t15 = d3s3;
-			double ds_t25 = ds3;
-
-			auto dp_ds_t15 = dp_t15 / ds_t15;
-			auto d2p_ds2_t15 = (d2p_t15 - dp_ds_t15 * d2s_t15) / ds_t15 / ds_t15;
-			auto d3p_ds3_t15 = (d3p_t15 - 3 * d2p_ds2_t15 * ds_t15 * d2s_t15 - dp_ds_t15 * d3s_t15) / ds_t15 / ds_t15 / ds_t15;
-
-			auto s25_s15 = (ds2 + ds3) / 2 * dt;
-			auto d3p_ds3_t25 = d3p_ds3_t15;
-			auto d2p_ds2_t25 = d2p_ds2_t15 + d3p_ds3_t15 * s25_s15;
-			auto dp_ds_t25 = dp_ds_t15 + d2p_ds2_t15 * s25_s15 + 0.5 * d3p_ds3_t15 * s25_s15 * s25_s15;
-
-			//std::cout << i << std::setprecision(15) << "  p:  " << p0[0] <<"  " << p1[0] << "  " << p2[0] << "  " << p3[0] << std::endl;
-			//std::cout << i << std::setprecision(15) << "  s:  " << s0 << "  " << s1 << "  " << s2 << "  " << s3 << std::endl;
-			//std::cout << i << std::setprecision(15) <<"  d2p_ds2_t15:   " << d2p_ds2_t15 << std::endl;
-		}
-
-
-		poss.push_back(p3[0]);
-	}
-
-	aris::dynamic::dlmwrite(n + 4, 1, poss.data(), "C:\\Users\\py033\\Desktop\\test_data\\poss.txt");
+	aris::dynamic::dlmwrite(n, 1, result.poss.data(), "C:\\Users\\py033\\Desktop\\test_data\\poss.txt");
 }
 
 auto test_smooth() -> void {

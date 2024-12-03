@@ -1505,7 +1505,7 @@ namespace aris::plan {
 		//%     rhs_21 = (d2p_max - e3)/f3
 		//%
 		//%  -- COND 2.2 加速度不超的前提下，当前速度不能太快，否则未来位置可能超出边界
-		//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%tbd
+		//%     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%tbd
 		//%
 		//% 【LEVEL 3】p,v,a,j不超边界
 		//%  -- COND 3.0 下一时刻的d3s满足条件
@@ -1597,138 +1597,168 @@ namespace aris::plan {
 			auto e4 = g;
 
 			if (std::abs(k) > zero_check) {
-				auto lhs01_local = (p_min[i] - e1) / f1;
-				auto rhs01_local = (p_max[i] - e2) / f1;
+				auto lhs1_local = (p_min[i] - e1) / f1;
+				auto rhs1_local = (p_max[i] - e2) / f1;
 
-				auto lhs11_local = (dp_min[i] * VEL_BOUND_RATIO - e2) / f2;
-				auto rhs11_local = (dp_max[i] * VEL_BOUND_RATIO - e2) / f2;
+				auto lhs2_local = (dp_min[i] * VEL_BOUND_RATIO - e2) / f2;
+				auto rhs2_local = (dp_max[i] * VEL_BOUND_RATIO - e2) / f2;
 
-				auto lhs21_local = (d2p_min[i] * ACC_BOUND_RATIO - e3) / f3;
-				auto rhs21_local = (d2p_max[i] * ACC_BOUND_RATIO - e3) / f3;
+				auto lhs3_local = (d2p_min[i] * ACC_BOUND_RATIO - e3) / f3;
+				auto rhs3_local = (d2p_max[i] * ACC_BOUND_RATIO - e3) / f3;
 
-				auto lhs32_local = (d3p_min[i] * JERK_BOUND_RATIO - e4) / f4;
-				auto rhs32_local = (d3p_max[i] * JERK_BOUND_RATIO - e4) / f4;
+				auto lhs4_local = (d3p_min[i] * JERK_BOUND_RATIO - e4) / f4;
+				auto rhs4_local = (d3p_max[i] * JERK_BOUND_RATIO - e4) / f4;
 
 				if (k < 0) {
-					std::swap(lhs01_local, rhs01_local);
-					std::swap(lhs11_local, rhs11_local);
-					std::swap(lhs21_local, rhs21_local);
-					std::swap(lhs32_local, rhs32_local);
+					std::swap(lhs1_local, rhs1_local);
+					std::swap(lhs2_local, rhs2_local);
+					std::swap(lhs3_local, rhs3_local);
+					std::swap(lhs4_local, rhs4_local);
 				}
 
-				auto lhs_d3s_local = lhs32_local;
-				auto rhs_d3s_local = rhs32_local;
+				auto lhs_d3s_local = lhs4_local;
+				auto rhs_d3s_local = rhs4_local;
 
-				auto lhs_d2s_local = d2s3 + lhs21_local * dt;
-				auto rhs_d2s_local = d2s3 + rhs21_local * dt;
+				auto lhs_d2s_local = d2s3 + lhs3_local * dt;
+				auto rhs_d2s_local = d2s3 + rhs3_local * dt;
+				
+				auto lhs_ds_local = ds3 + d2s3 * dt + lhs2_local * dt * dt;
+				auto rhs_ds_local = ds3 + d2s3 * dt + rhs2_local * dt * dt;
 
-				double ds_t2 = (ds_t15 + ds_t25) / 2;
-				double d3p_ds3_t2 = (d3p_ds3_t15 + d3p_ds3_t25) / 2;
-				double d2p_ds2_t2 = (d2p_ds2_t15 + d2p_ds2_t25) / 2;
+				auto lhs_s_local = s3 + ds3 * dt + d2s3 * dt * dt + lhs1_local * dt * dt * dt;
+				auto rhs_s_local = s3 + ds3 * dt + d2s3 * dt * dt + rhs1_local * dt * dt * dt;	
 
-				if (3 * d2p_ds2_t2 * ds_t2 > zero_check) {
-					rhs_d2s_local = std::min(rhs_d2s_local, (d3p_max[i] - d3p_ds3_t2 * ds_t2 * ds_t2 * ds_t2) / (3 * d2p_ds2_t2 * ds_t2));
-					lhs_d2s_local = std::max(lhs_d2s_local, (d3p_min[i] - d3p_ds3_t2 * ds_t2 * ds_t2 * ds_t2) / (3 * d2p_ds2_t2 * ds_t2));
-				}
-				else if (3 * d2p_ds2_t2 * ds_t2 < -zero_check) {
-					rhs_d2s_local = std::min(rhs_d2s_local, (d3p_min[i] - d3p_ds3_t2 * ds_t2 * ds_t2 * ds_t2) / (3 * d2p_ds2_t2 * ds_t2));
-					lhs_d2s_local = std::max(lhs_d2s_local, (d3p_max[i] - d3p_ds3_t2 * ds_t2 * ds_t2 * ds_t2) / (3 * d2p_ds2_t2 * ds_t2));
-				}
+				// 修正1：某个电机减速度过大的时候，如果减小 ds，反而会增加减速度，因此需要提前预判 //
+				double rhs_d2s_local2 = rhs_d2s_local, rhs_ds_local2 = rhs_ds_local;
 
-				auto lhs_ds_local = ds3 + d2s3 * dt + lhs11_local * dt * dt;
-				auto rhs_ds_local = ds3 + d2s3 * dt + rhs11_local * dt * dt;
+				auto solve_sdis_dsb = [](double ds_a, double d2s_a, double d3s_min, double s_dis, double ds_b, double d2p_ext, double zero_check)->double {
+					double B3 = d3s_min;
+					double B2 = d2s_a;
+					double B1 = ds_a;
+					double B0 = 0;
 
-				////////////////////// 根据 F 计算，待舍弃 //
-				{
-					auto g2 = d3p_ds3_t25 * ds_t25 * ds_t25 * ds_t25 + 2 * d2p_ds2_t25 * ds3 * d2s3;
-					auto k2 = d2p_ds2_t25 * ds_t25 * dt;
+					double k3 = -B3 / 12;
+					double k1 = B1 / 2 + ds_b / 2;
+					double k0 = B0 - s_dis;
 
-					auto F3 = d2p3 - (dp2 + dp3) / (ds2 + ds3) * d2s3;
-					auto f5 = k2 * dt;
-					auto e5 = F3 + g2 * dt;
-
-					double f6 = k2;
-					double e6 = g2;
-
-					auto lhs205_local = (d2p_min[i] - e5) / f5;
-					auto rhs205_local = (d2p_max[i] - e5) / f5;
-
-					double d3s_min_guess = lhs_d3s_local;
-					double d3s_max_guess = rhs_d3s_local;
-					double d2F_max = 5 * d3p_ds3_t25 * ds_t25 * ds_t25 * d2s3 + 2 * d2p_ds2_t25 * d2s3 * d2s3 + 2 * d2p_ds2_t25 * ds_t25 * d3s_max_guess;
-					double d2F_min = 5 * d3p_ds3_t25 * ds_t25 * ds_t25 * d2s3 + 2 * d2p_ds2_t25 * d2s3 * d2s3 + 2 * d2p_ds2_t25 * ds_t25 * d3s_min_guess;
-
-
-					if (d2F_max < d2F_min)
-						std::swap(d2F_max, d2F_min);
-
-					double dF3 = d3p_ds3_t25 * ds_t25 * ds_t25 * ds_t25 + 2 * d2p_ds2_t25 * ds_t25 * d2s3;
-
-					double value2 = ((d2F_min * d2F_min * dt * dt) / 16 + 2 * d2F_min * F3 - 2 * d2F_min * d2p_max[i] + (dF3 * d2F_min * dt) / 2);
-					double dF_max = std::sqrt(std::max(value2, 0.0)) + d2F_min * dt / 4;
-					double value1 = ((d2F_max * d2F_max * dt * dt) / 16 + 2 * d2F_max * F3 - 2 * d2F_max * d2p_min[i] + (dF3 * d2F_max * dt) / 2);
-					double dF_min = -std::sqrt(std::max(value1, 0.0)) + d2F_max * dt / 4;
-
-					auto lhs23_local = (d3p_min[i] - e6) / f6;
-					auto rhs23_local = (d3p_max[i] - e6) / f6;
-
-					auto lhs24_local = (dF_min - e6) / f6;
-					auto rhs24_local = (dF_max - e6) / f6;
-					
-
-					//lhs_d3s_local = std::max({ lhs_d3s_local, lhs23_local, lhs24_local });
-				}
-
-
-				if (d2p_ds2_t25 > zero_check && dp_ds_t25 < -zero_check) {
-					
-					
-					rhs_ds_local = std::min(rhs_ds_local, std::sqrt(std::max(d2p_max[i], 0.0) / d2p_ds2_t25));
-
-					double A1{ dp_ds_t25 }, A2{ d2p_ds2_t25 }, A3{ d3p_ds3_t25 };
-					double B1{ ds_t25 }, B2, B3{ lhs_d3s_local };
-
-					double a = ((A2 * B2 * B2) / 2 + A2 * (B2 * B2 + B1 * B3) + A2 * B1 * B3 + 3 * A3 * B1 * B1 * B2);
-
-
-					double d2p_ext = d2p_max[i];
-
-					double k3 = 6 * A1 * A2;
-					double k2 = (-3 * A2*A2 * B1*B1 - 6 * d2p_ext * A2 + 12 * A1 * A3 * B1*B1);
-					double k1 = (6 * A2 * A3 * B1*B1*B1*B1 - 12 * A3 * d2p_ext * B1*B1 + 2 * A1 * A2 * B3 * B1);
-					double k0 = B3 * (8 * A2*A2 * B1*B1*B1 - 2 * A1 * A3 * B1*B1*B1) - A1*A1 * B3*B3 - A3*A3 * B1*B1*B1*B1*B1*B1 - 8 * A2 * B1 * B3 * d2p_ext;
-
-//					k3 = 6*A1*A2
-//k2 = (- 3*A2^2*B1^2 - 6*d2p_ext*A2 + 12*A1*A3*B1^2)
-//k1 = (6*A2*A3*B1^4 - 12*A3*d2p_ext*B1^2 + 2*A1*A2*B3*B1)
-//k0 = B3*(8*A2^2*B1^3 - 2*A1*A3*B1^3) - A1^2*B3^2 - A3^2*B1^6 - 8*A2*B1*B3*d2p_ext
-
-					double x[3];
-					int ret = s_poly3_solve(k3, k2, k1, k0, x);
-
-					std::cout << k3 * x[0] * x[0] * x[0] + k2 * x[0] * x[0] + k1 * x[0] + k0 << std::endl;
-					std::cout << k3 * x[1] * x[1] * x[1] + k2 * x[1] * x[1] + k1 * x[1] + k0 << std::endl;
-					std::cout << k3 * x[2] * x[2] * x[2] + k2 * x[2] * x[2] + k1 * x[2] + k0 << std::endl;
-
-					if (a > 1e-3) {
-						rhs_d2s_local = std::min(rhs_d2s_local, x[1]);
-						lhs_d2s_local = std::max(lhs_d2s_local, x[0]);
+					double t[3], t_sol;
+					if (auto ret = s_poly3_solve(k3, 0.0, k1, k0, t)) {
+						t_sol = t[ret - 1];
+						if (t_sol > 0) {
+							auto d2s_max2 = (ds_b - B3 / 2 * t_sol * t_sol - B1) / t_sol;
+							return d2s_max2;
+						}
 					}
+
+					return std::numeric_limits<double>::quiet_NaN();
+				};
+
+				double d2p_ds2_a = d2p_ds2_t15;
+				double d3p_ds3_a = d3p_ds3_t15;
+				double dp_ds_a = dp_ds_t15;
+
+				if (d3p_ds3_t15 > zero_check && d2p_ds2_t15 > zero_check && dp_ds_t15 < -zero_check) {
+					double s_b = -(d2p_ds2_a - std::sqrt(d2p_ds2_a * d2p_ds2_a - 2 * d3p_ds3_a * dp_ds_a)) / d3p_ds3_a;
+					double ds_b = std::sqrt(d2p_max[i] / (d2p_ds2_a + d3p_ds3_a * s_b));
+
+					if (auto d2s_max2 = solve_sdis_dsb(ds_t15, d2s_t15, lhs_d3s_local, s_b, ds_b, d2p_max[i], zero_check); std::isfinite(d2s_max2)) {
+						rhs_d2s_local2 = std::min(rhs_d2s_local, std::max(d2s_max2, d2s3 + lhs_d3s_local * dt));
+					}
+
+					if (ds_b < ds_t15) {
+						double s_b_2 = (d2p_max[i] / ds_t15 / ds_t15 - d2p_ds2_a) / d3p_ds3_a;
+						if (s_b_2 < 0) {
+							double ds_b_2 = ds_b + (ds_t15 - ds_b) * (-s_b_2 / s_b); // 以线性达到一半
+							if (auto d2s_max2 = solve_sdis_dsb(ds_t15, d2s_t15, lhs_d3s_local, s_b_2, ds_b_2, d2p_max[i], zero_check); std::isfinite(d2s_max2)) {
+								rhs_d2s_local2 = std::min(rhs_d2s_local, std::max(d2s_max2, d2s3 + lhs_d3s_local * dt));
+							}
+						}
+						else {
+							double ds_b_2 = ds_b + (ds_t15 - ds_b) * std::sqrt(s_b_2 / s_b); // 以根号达到一半
+							if (auto d2s_max2 = solve_sdis_dsb(ds_t15, d2s_t15, lhs_d3s_local, s_b_2, ds_b_2, d2p_max[i], zero_check); std::isfinite(d2s_max2)) {
+								rhs_d2s_local2 = std::min(rhs_d2s_local, std::max(d2s_max2, d2s3 + lhs_d3s_local * dt));
+							}
+						}
+					}
+
+					// 对ds做限制 //
+					rhs_ds_local2 = std::min(rhs_ds_local, std::sqrt(std::max(d2p_max[i], 0.0) / d2p_ds2_t25));
 				}
 				else if (d2p_ds2_t25 < -zero_check && dp_ds_t25 > zero_check) {
-					rhs_ds_local = std::min(rhs_ds_local, std::sqrt(std::min(d2p_min[i], 0.0) / d2p_ds2_t25));
+					double s_b = -(d2p_ds2_a + std::sqrt(d2p_ds2_a * d2p_ds2_a - 2 * d3p_ds3_a * dp_ds_a)) / d3p_ds3_a;
+					double ds_b = std::sqrt(d2p_min[i] / (d2p_ds2_a + d3p_ds3_a * s_b));
+
+					if (auto d2s_max2 = solve_sdis_dsb(ds_t15, d2s_t15, lhs_d3s_local, s_b, ds_b, d2p_min[i], zero_check); std::isfinite(d2s_max2)) {
+						rhs_d2s_local2 = std::min(rhs_d2s_local, std::max(d2s_max2, d2s3 + lhs_d3s_local * dt));
+					}
+
+					if (ds_b < ds_t15) {
+						double s_b_2 = (d2p_min[i] / ds_t15 / ds_t15 - d2p_ds2_a) / d3p_ds3_a;
+						if (s_b_2 < 0) {
+							//rhs_d2s_local = std::min(rhs_d2s_local, d2s3 + lhs_d3s_local * dt);
+
+							double ds_b_2 = ds_b + (ds_t15 - ds_b) * (-s_b_2 / s_b); // 以根号达到一半
+
+							if (auto d2s_max2 = solve_sdis_dsb(ds_t15, d2s_t15, lhs_d3s_local, s_b_2, ds_b_2, d2p_max[i], zero_check); std::isfinite(d2s_max2)) {
+								rhs_d2s_local2 = std::min(rhs_d2s_local, std::max(d2s_max2, d2s3 + lhs_d3s_local * dt));
+							}
+						}
+						else {
+							double ds_b_2 = ds_b + (ds_t15 - ds_b) * std::sqrt(s_b_2 / s_b); // 以根号达到一半
+
+							if (auto d2s_max2 = solve_sdis_dsb(ds_t15, d2s_t15, lhs_d3s_local, s_b_2, ds_b_2, d2p_max[i], zero_check); std::isfinite(d2s_max2)) {
+								rhs_d2s_local2 = std::min(rhs_d2s_local, std::max(d2s_max2, d2s3 + lhs_d3s_local * dt));
+							}
+						}
+						
+						
+						
+					}
+
+					// 对ds做限制
+					rhs_ds_local2 = std::min(rhs_ds_local, std::sqrt(std::min(d2p_min[i], 0.0) / d2p_ds2_t25));
 				}
-				
+				///////////////////////////////////////////////////////////////
 
-				auto lhs_s_local = s3 + ds3 * dt + d2s3 * dt * dt + lhs01_local * dt * dt * dt;
-				auto rhs_s_local = s3 + ds3 * dt + d2s3 * dt * dt + rhs01_local * dt * dt * dt;
+				// 修正2：在到速度极限前，提前降低加速度 //
+				auto cpt_v_bound = [](double p_max, double p_min, double v_max, double v_min, double a_max, double a_min, double dt, double p, double dp)->std::tuple<double, double> {
+					double v_max_real = v_max, v_min_real = v_min;
 
+					if (dp > 0) {
+						double value2 = ((a_min * a_min * dt * dt) / 16 + 2 * a_min * p - 2 * a_min * p_max + (dp * a_min * dt) / 2);
+						v_max_real = a_min > 0.0 ? 0.0 : std::min(std::sqrt(value2) + a_min * dt / 4, v_max);
+					}
+					else {
+						double value1 = ((a_max * a_max * dt * dt) / 16 + 2 * a_max * p - 2 * a_max * p_min + (dp * a_max * dt) / 2);
+						v_min_real = a_max < 0.0 ? 0.0 : std::max(-std::sqrt(value1) + a_max * dt / 4, v_min);
+					}
+
+					return std::make_tuple(v_min_real, v_max_real);
+				};
+
+				double rhs_d2s_local3 = rhs_d2s_local, lhs_d2s_local3 = lhs_d2s_local;
+
+				{
+					auto [d2p_min2, d2p_max2] = cpt_v_bound(dp_max[i], dp_min[i], d2p_max[i], d2p_min[i], d3p_max[i], d3p_min[i], dt, dp3, d2p3);
+					auto lhs3_local = (d2p_min2 * ACC_BOUND_RATIO - e3) / f3;
+					auto rhs3_local = (d2p_max2 * ACC_BOUND_RATIO - e3) / f3;
+
+					if (k < 0) {
+						std::swap(lhs3_local, rhs3_local);
+					}
+
+					lhs_d2s_local3 = d2s3 + lhs3_local * dt;
+					rhs_d2s_local3 = d2s3 + rhs3_local * dt;
+				}
+
+
+				// 最终更新数据 //
 				lhs_d3s = std::max(lhs_d3s_local, lhs_d3s);
 				rhs_d3s = std::min(rhs_d3s_local, rhs_d3s);
-				lhs_d2s = std::max(lhs_d2s_local, lhs_d2s);
-				rhs_d2s = std::min(rhs_d2s_local, rhs_d2s);
+				lhs_d2s = std::max({ lhs_d2s_local, lhs_d2s_local3, lhs_d2s });
+				rhs_d2s = std::min({ rhs_d2s_local, rhs_d2s_local2, rhs_d2s_local3, rhs_d2s });
 				lhs_ds = std::max(lhs_ds_local, lhs_ds);
-				rhs_ds = std::min(rhs_ds_local, rhs_ds);
+				rhs_ds = std::min({ rhs_ds_local, rhs_ds_local2, rhs_ds });
 				lhs_s = std::max(lhs_s_local, lhs_s);
 				rhs_s = std::min(rhs_s_local, rhs_s);
 			}
@@ -1772,13 +1802,8 @@ namespace aris::plan {
 
 			return std::make_tuple(v_min_real, v_max_real);
 		};
-
-
 		{
-			auto [d2s_min2, d2s_max2] = cpt_v_bound(rhs_ds, lhs_ds, rhs_d2s, lhs_d2s, rhs_d3s, lhs_d3s, dt, ds3, d2s3);
-			
-
-			//auto [d2s_min2, d2s_max2] = cpt_v_bound(rhs_ds, lhs_ds, rhs_d2s, lhs_d2s, rhs_d3s, lhs_d3s, dt, ds3, d2s3);
+			auto [d2s_min2, d2s_max2] = cpt_v_bound(1.0, 0.05, rhs_d2s, lhs_d2s, rhs_d3s, lhs_d3s, dt, ds3, d2s3);
 			d2s_min = std::max(d2s_min, d2s_min2);
 			d2s_max = std::min(d2s_max, d2s_max2);
 		}
@@ -1796,8 +1821,6 @@ namespace aris::plan {
 				next_d2s = (d2s_max + d2s_min) / 2;
 			}
 
-
-			//auto next_d2s = std::min(d2s_min, d2s_max);
 			ret.next_ds = ds3 + next_d2s * dt;
 			ret.next_ds = std::min(ret.next_ds, std::max(MAX_DS, target_ds));
 			ret.next_ds = std::max(ret.next_ds, std::min(MIN_DS, target_ds));
