@@ -6,6 +6,8 @@
 #include <aris/core/msg.hpp>
 
 namespace aris::core{
+	using SOCKET_T = int;
+
 	class ARIS_API Socket{
 	public:
 		enum class State{

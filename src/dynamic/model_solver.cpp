@@ -825,9 +825,9 @@ namespace aris::dynamic{
 			// 计算 cp //
 			if (cpt_cp){
 				auto m = static_cast<const Motion*>(d->rel_.blk_data_[1].cst_);
-
+				
 				double rm[9], pm_j_should_be[16];
-				s_rmz(*d->rel_.blk_data_[1].mp_, rm);
+				s_rmz(m->mp2mpInternal(*d->rel_.blk_data_[1].mp_), rm);
 
 				s_vc(16, pmJ, pm_j_should_be);
 				s_mm(3, 3, 3, pmJ, 4, rm, 3, pm_j_should_be, 4);
@@ -859,7 +859,7 @@ namespace aris::dynamic{
 
 				double pm_j_should_be[16];
 				s_vc(16, pmJ, pm_j_should_be);
-				s_va(3, *d->rel_.blk_data_[1].mp_, pm_j_should_be + m->axis(), 4, pm_j_should_be + 3, 4);
+				s_va(3, m->mp2mpInternal(*d->rel_.blk_data_[1].mp_), pm_j_should_be + m->axis(), 4, pm_j_should_be + 3, 4);
 
 				double pm_j2i[16], ps_j2i[6];
 				s_inv_pm_dot_pm(pmI, pm_j_should_be, pm_j2i);
@@ -1478,7 +1478,7 @@ namespace aris::dynamic{
 
 		return 0;
 	}
-	auto UniversalSolver::kinPosPure(const double* motion_pos, double* answer, int which_root)->int {
+	auto UniversalSolver::kinPosPure(const double* motion_pos, double* answer, int which_root, const double* current_answer)->int {
 		kinPosSetActiveMotionPos(motion_pos);
 		if (auto ret = kinPosCompute())
 			return ret;
@@ -1488,7 +1488,7 @@ namespace aris::dynamic{
 		}
 	}
 	auto UniversalSolver::whichRootOfAnswer(const double* motion_pos, const double* answer)->int {
-		int solution_id = 0;
+		int solution_id = -1;
 		double error = std::numeric_limits<double>::infinity();
 
 		if (rootNumber() == 1) {
@@ -1496,17 +1496,18 @@ namespace aris::dynamic{
 		}
 		else {
 			for (int i = 0; i < rootNumber(); ++i) {
-				kinPosPure(motion_pos, imp_->pd_->deactive_mp_, i);
-				aris::Size pos = 0;
-				double this_error = 0.0;
-				for (int j = 0; j < imp_->pd_->deactive_mot_size_; ++j) {
-					this_error = std::max(this_error, imp_->pd_->deactive_mots_[j]->cptPError(imp_->pd_->deactive_mp_ + pos, answer + pos));
-					pos += imp_->pd_->deactive_mots_[j]->pSize();
-				}
+				if (auto ret = kinPosPure(motion_pos, imp_->pd_->deactive_mp_, i, answer); ret >= 0) {
+					aris::Size pos = 0;
+					double this_error = 0.0;
+					for (int j = 0; j < imp_->pd_->deactive_mot_size_; ++j) {
+						this_error = std::max(this_error, imp_->pd_->deactive_mots_[j]->cptPError(imp_->pd_->deactive_mp_ + pos, answer + pos));
+						pos += imp_->pd_->deactive_mots_[j]->pSize();
+					}
 
-				if (this_error < error) {
-					error = this_error;
-					solution_id = i;
+					if (this_error < error) {
+						error = this_error;
+						solution_id = i;
+					}
 				}
 			}
 
@@ -1828,7 +1829,8 @@ namespace aris::dynamic{
 	};
 
 	struct ForwardKinematicSolver::Imp { 
-		std::vector<double> J_vec_, cf_vec_;
+		double* J_{ nullptr }, * cf_{ nullptr };
+		std::vector<char> mem_pool_;
 		aris::Size mJf_{ 0 }, nJf_{ 0 };
 	};
 	auto ForwardKinematicSolver::allocateMemory()->void{
@@ -1843,8 +1845,14 @@ namespace aris::dynamic{
 			imp_->mJf_ += gm.dim();
 		}
 
-		imp_->J_vec_.resize(6 * model()->generalMotionPool().size() * model()->motionPool().size());
-		imp_->cf_vec_.resize(6 * model()->generalMotionPool().size());
+		aris::Size mem_pool_size{0};
+		core::allocMem(mem_pool_size, imp_->J_, imp_->mJf_ * imp_->nJf_);
+		core::allocMem(mem_pool_size, imp_->cf_, imp_->mJf_);
+
+		imp_->mem_pool_.resize(mem_pool_size);
+
+		imp_->J_ = core::getMem(imp_->mem_pool_.data(), imp_->J_);
+		imp_->cf_ = core::getMem(imp_->mem_pool_.data(), imp_->cf_);
 
 		UniversalSolver::allocateMemory();
 	}
@@ -1888,7 +1896,7 @@ namespace aris::dynamic{
 				gm.makI()->fatherPart().setVs(vs_I);
 				gm.makJ()->fatherPart().setVs(vs_J);
 				gm.updV();
-				s_vc(gm.dim(), gm.v(), 1, imp_->J_vec_.data() + at(pos, mot.id(), nJf()), nJf());
+				s_vc(gm.dim(), gm.v(), 1, imp_->J_ + at(pos, mot.id(), nJf()), nJf());
 
 				// restore vs //
 				gm.makI()->fatherPart().setVs(vs_I_restore);
@@ -1902,62 +1910,28 @@ namespace aris::dynamic{
 				gm.makI()->fatherPart().setAs(as_I);
 				gm.makJ()->fatherPart().setAs(as_J);
 				gm.updA();
-				s_vc(gm.dim(), gm.a(), imp_->cf_vec_.data() + pos);
+				s_vc(gm.dim(), gm.a(), imp_->cf_ + pos);
 				
 				// restore data //
 				gm.makI()->fatherPart().setAs(as_I_restore);
 				gm.makJ()->fatherPart().setAs(as_J_restore);
 				gm.setV(mv_restore);
 				gm.setA(ma_restore);
-
-				// old method //
-				//double tem[6];
-				//s_vc(6, Jg() + at(gm.makI()->fatherPart().id() * 6, mot.id(), nJg()), nJg(), tem, 1);
-				//s_vs(6, Jg() + at(gm.makJ()->fatherPart().id() * 6, mot.id(), nJg()), nJg(), tem, 1);
-				//s_inv_tv(*gm.makJ()->pm(), tem, 1, imp_->J_vec_.data() + at(gm.id() * 6, mot.id(), nJf()), nJf());
-				// 以下求cf //
-				//s_vc(6, cg() + gm.makI()->fatherPart().id() * 6, tem);
-				//s_vs(6, cg() + gm.makJ()->fatherPart().id() * 6, tem);
-				//s_inv_as2as(*gm.makJ()->pm(), gm.makJ()->vs(), cg() + gm.makJ()->fatherPart().id() * 6, gm.makI()->vs(), cg() + gm.makI()->fatherPart().id() * 6, imp_->cf_vec_.data() + gm.id() * 6);
-
 			}
 			pos += gm.dim();
 		}
 	}
-	// old method //
-	//auto ForwardKinematicSolver::cptJacobiWrtEE()noexcept->void{
-	//	cptGeneralJacobi();
-	//
-	//	for (auto &gm : model()->generalMotionPool()){
-	//		for (auto &mot : model()->motionPool()){
-	//			double tem[6];
-	//			s_vc(6, Jg() + at(gm.makI()->fatherPart().id() * 6, mot.id(), nJg()), nJg(), tem, 1);
-	//			s_vs(6, Jg() + at(gm.makJ()->fatherPart().id() * 6, mot.id(), nJg()), nJg(), tem, 1);
-	//
-	//			s_inv_tv(*gm.makJ()->pm(), tem, 1, imp_->J_vec_.data() + at(gm.id() * 6, mot.id(), nJf()), nJf());
-	//
-	//			//// 以下求cf //
-	//			//s_vc(6, cg() + gm.makI()->fatherPart().id() * 6, tem);
-	//			//s_vs(6, cg() + gm.makJ()->fatherPart().id() * 6, tem);
-	//			//s_inv_as2as(*gm.makJ()->pm(), gm.makJ()->vs(), cg() + gm.makJ()->fatherPart().id() * 6, gm.makI()->vs(), cg() + gm.makI()->fatherPart().id() * 6, imp_->cf_vec_.data() + gm.id() * 6);
-	//
-	//			// 以上和之前做法都一样，以下转换坐标系 //
-	//			double pp[3];
-	//			gm.makI()->getPp(*gm.makJ(), pp);
-	//			s_c3a(imp_->J_vec_.data() + at(gm.id() * 6 + 3, mot.id(), nJf()), nJf(), pp, 1, imp_->J_vec_.data() + at(gm.id() * 6, mot.id(), nJf()), nJf());
-	//		}
-	//	}
-	//}
 	auto ForwardKinematicSolver::mJf()const noexcept->Size { return imp_->mJf_;  }
 	auto ForwardKinematicSolver::nJf()const noexcept->Size { return imp_->nJf_; }
-	auto ForwardKinematicSolver::Jf()const noexcept->const double * { return imp_->J_vec_.data(); }
-	auto ForwardKinematicSolver::cf()const noexcept->const double * { return imp_->cf_vec_.data(); }
+	auto ForwardKinematicSolver::Jf()const noexcept->const double * { return imp_->J_; }
+	auto ForwardKinematicSolver::cf()const noexcept->const double * { return imp_->cf_; }
 	ForwardKinematicSolver::~ForwardKinematicSolver() = default;
 	ForwardKinematicSolver::ForwardKinematicSolver(Size max_iter_count, double max_error) :UniversalSolver(max_iter_count, max_error), imp_(new Imp) {}
 	ARIS_DEFINE_BIG_FOUR_CPP(ForwardKinematicSolver);
 
 	struct InverseKinematicSolver::Imp{
-		std::vector<double> J_vec_, ci_vec_;
+		double* J_{ nullptr }, * ci_{ nullptr };
+		std::vector<char> mem_pool_;
 		aris::Size mJi_{ 0 }, nJi_{ 0 };
 	};
 	auto InverseKinematicSolver::allocateMemory()->void{
@@ -1972,8 +1946,14 @@ namespace aris::dynamic{
 			imp_->nJi_ += gm.dim();
 		}
 
-		imp_->J_vec_.resize(imp_->mJi_ * imp_->nJi_);
-		imp_->ci_vec_.resize(imp_->mJi_);
+		aris::Size mem_pool_size{ 0 };
+		core::allocMem(mem_pool_size, imp_->J_, imp_->mJi_ * imp_->nJi_);
+		core::allocMem(mem_pool_size, imp_->ci_, imp_->mJi_);
+
+		imp_->mem_pool_.resize(mem_pool_size);
+
+		imp_->J_ = core::getMem(imp_->mem_pool_.data(), imp_->J_);
+		imp_->ci_ = core::getMem(imp_->mem_pool_.data(), imp_->ci_);
 
 		UniversalSolver::allocateMemory();
 	}
@@ -2005,7 +1985,7 @@ namespace aris::dynamic{
 					s_vs(6, Jg() + at(mot.makJ()->fatherPart().id() * 6, gm.id() * 6 + i, nJg()), nJg(), tem, 1);
 
 					s_inv_tv(*mot.makI()->pm(), tem, tem2);
-					imp_->J_vec_[at(mot.id(), pos + i, nJi())] = tem2[mot.axis()];
+					imp_->J_[at(mot.id(), pos + i, nJi())] = tem2[mot.axis()];
 
 					// 以下求ci //
 					// 这一段相当于updMv //
@@ -2018,7 +1998,7 @@ namespace aris::dynamic{
 					s_vs(6, cg() + mot.makJ()->fatherPart().id() * 6, tem);
 					s_va(6, -dq, tem2, tem);
 					s_inv_tv(*mot.makI()->pm(), tem, tem2);
-					imp_->ci_vec_[mot.id()] = tem2[mot.axis()];
+					imp_->ci_[mot.id()] = tem2[mot.axis()];
 				}
 			}
 			pos += gm.dim();
@@ -2026,8 +2006,8 @@ namespace aris::dynamic{
 	}
 	auto InverseKinematicSolver::mJi()const noexcept->Size { return imp_->mJi_; }
 	auto InverseKinematicSolver::nJi()const noexcept->Size { return imp_->nJi_; }
-	auto InverseKinematicSolver::Ji()const noexcept->const double * { return imp_->J_vec_.data(); }
-	auto InverseKinematicSolver::ci()const noexcept->const double * { return imp_->ci_vec_.data(); }
+	auto InverseKinematicSolver::Ji()const noexcept->const double * { return imp_->J_; }
+	auto InverseKinematicSolver::ci()const noexcept->const double * { return imp_->ci_; }
 	InverseKinematicSolver::~InverseKinematicSolver() = default;
 	InverseKinematicSolver::InverseKinematicSolver(Size max_iter_count, double max_error) :UniversalSolver(max_iter_count, max_error), imp_(new Imp) {}
 	ARIS_DEFINE_BIG_FOUR_CPP(InverseKinematicSolver);

@@ -9,8 +9,8 @@ namespace aris::dynamic {
 	/// @{
 	///
 	
-	// axis 为外部轴的轴，0,1,2,3,4,5 分别代表xyz（平移）abc（旋转）
-	// pm 为外部轴的位置姿态
+	// pos  为外部轴的位置
+	// axis 为外部轴的轴方向，例如 x 向，axis应为[1,0,0]
 	// is_revolute: 是否为转轴
 	// is_coupling: 是否与其他模型耦合，仅影响规划
 	auto inline createExternalAxisModel(const double* pos, const double* axis, bool is_revolute, bool is_coupling = false)->std::unique_ptr < Model > {

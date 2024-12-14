@@ -1275,6 +1275,17 @@ namespace aris::control{
 			.prop("slave", &setFtSensorSlave, &getFtSensorSlave)
 			;
 
+		auto setCustomSlave = [](EthercatCustomSlave* ec_mot, int id) {
+			ec_mot->setSlave(&dynamic_cast<EthercatSlave&>(aris::server::ControlServer::instance().master().slavePool().at(id)));
+		};
+		auto getCustomSlave = [](EthercatCustomSlave* ec_mot)->int {
+			return ec_mot->slave()->id();
+		};
+		aris::core::class_<EthercatCustomSlave>("EthercatCustomSlave")
+			.inherit<CustomSlave>()
+			.prop("slave", &setCustomSlave, &getCustomSlave)
+			;
+
 		aris::core::class_<EthercatIoBeckhoff>("Aris::EthercatIoBeckhoff")
 			.inherit<EthercatDigitalIo>()
 			;

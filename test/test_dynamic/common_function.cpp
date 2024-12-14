@@ -29,8 +29,8 @@ auto test_model_kinematics_pos(aris::dynamic::ModelBase& m, int linspace_num, co
 		// 通过正解设置初值，考虑到反解可能会有多解，因此这里不去比较直接反解回来的输入 //
 		m.setInputPos(input.data());
 		if (m.forwardKinematics()) {
-			std::cout << __FILE__ << __LINE__ << " failed forward kinematics: perhaps outside the workspace" << std::endl;
-			aris::dynamic::dsp(1, m.inputPosSize(), input.data());
+			//std::cout << __FILE__ << __LINE__ << " failed forward kinematics: perhaps outside the workspace" << std::endl;
+			//aris::dynamic::dsp(1, m.inputPosSize(), input.data());
 			continue;
 		}
 

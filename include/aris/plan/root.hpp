@@ -123,6 +123,7 @@ namespace aris::plan{
 		auto sharedPtrForThis()noexcept->std::shared_ptr<Plan>;
 
 		// 指令分析相关 //
+		auto stringParam(std::string_view param_name)->std::string;
 		auto doubleParam(std::string_view param_name)->double;
 		auto floatParam(std::string_view param_name)->float;
 		auto int32Param(std::string_view param_name)->std::int32_t;

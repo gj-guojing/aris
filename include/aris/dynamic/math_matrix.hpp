@@ -748,7 +748,7 @@ namespace aris::dynamic{
 				}
 			}
 			else{
-				tau[ti] = 0.0;
+				tau[ti] = -2.0;
 			}
 		}
 	}
@@ -928,7 +928,7 @@ namespace aris::dynamic{
 
 			// 判断是否返回 //
 			max_value = std::sqrt(max_value);
-			if (max_value < zero_check) { s_fill(m - i, 1, 0.0, tau + ti, tau_t); return; }
+			if (max_value < zero_check) { s_fill(m - i, 1, -2.0, tau + ti, tau_t); return; }
 			
 			++rank;
 			s_swap_v(m, U + at(0, max_pos, u_t), u_t, U + at(0, i, u_t), u_t);
@@ -1212,6 +1212,86 @@ namespace aris::dynamic{
 	}
 	auto inline s_householder_utp2pinv(Size m, Size n, Size rank, const double *U, const double *tau, const Size *p, double *x, double *tau2, double zero_check = 1e-10)noexcept->void { s_householder_utp2pinv(m, n, rank, U, n, tau, 1, p, x, m, tau2, 1, zero_check); }
 
+	//    Q = f(U,tau)  where Q * R = A 
+	//
+	//    U :        m x n
+	//    Q :        m x m
+	//
+	//    Q can be the same address with U, if m < n
+	template<typename UType, typename QType>
+	auto inline s_householder_u2q(Size m, Size n, const double* U, UType u_t, double* Q, QType q_t)noexcept->void {
+		auto size = std::min(m, n);
+		s_fill(m - size, m - size, 0.0, Q + at(n, n, q_t), q_t);
+		for (Size i(-1), qii(at(n, n, q_t)); ++i < m - size; qii = next_d(qii, q_t)) 
+			Q[qii] = 1.0;
+		if (m > 0) 
+			Q[at(m - 1, m - 1, q_t)] = 1.0;
+
+		// make Q
+		for (Size j(std::min({ m - 1, m, n })), qjj(at(j - 1, j - 1, q_t)), uj1j(at(j, j - 1, u_t)); --j < std::min({ m - 1, m, n }); qjj = last_d(qjj, q_t), uj1j = last_d(uj1j, u_t)) {
+			double tau = (1.0 + s_vv(m - j - 1, U + uj1j, u_t, U + uj1j, u_t)) / 2;
+			double k = -1.0 / tau;
+
+			Q[qjj] = 1 + k;
+			s_vc(m - j - 1, k, U + uj1j, u_t, Q + next_r(qjj, q_t), q_t);
+			s_mm(1, m - j - 1, m - j - 1, Q + next_r(qjj, q_t), T(q_t), Q + next_d(qjj, q_t), q_t, Q + next_c(qjj, q_t), q_t);
+			s_mma(m - j - 1, m - j - 1, 1, U + uj1j, u_t, Q + next_c(qjj, q_t), q_t, Q + next_d(qjj, q_t), q_t);
+		}
+	}
+	auto inline s_householder_u2q(Size m, Size n, const double* U, double* Q)noexcept->void { s_householder_u2q(m, n, U, n, Q, m); }
+
+	//    Q = f(U,tau)  where Q * R = A 
+	//
+	//    U :        m x n
+	//    Q :        m x n
+	//
+	//    Q can be the same address with U
+	template<typename UType, typename QType>
+	auto inline s_householder_u2qmn(Size m, Size n, const double* U, UType u_t, double* Q, QType q_t)noexcept->void {
+		if (m <= n && m > 0) Q[at(m - 1, m - 1, q_t)] = 1.0;
+		// make Q
+		for (Size j(std::min({ m - 1, m, n })), qjj(at(j - 1, j - 1, q_t)), uj1j(at(j, j - 1, u_t)); --j < std::min({ m - 1, m, n }); qjj = last_d(qjj, q_t), uj1j = last_d(uj1j, u_t)) {
+			double tau = (1.0 + s_vv(m - j - 1, U + uj1j, u_t, U + uj1j, u_t)) / 2;
+			double k = -1.0 / tau;
+			
+			Q[qjj] = 1 + k;
+			s_vc(m - j - 1, k, U + uj1j, u_t, Q + next_r(qjj, q_t), q_t);
+			s_mm(1, std::min(m, n) - j - 1, m - j - 1, Q + next_r(qjj, q_t), T(q_t), Q + next_d(qjj, q_t), q_t, Q + next_c(qjj, q_t), q_t);
+			s_mma(m - j - 1, std::min(m, n) - j - 1, 1, U + uj1j, u_t, Q + next_c(qjj, q_t), q_t, Q + next_d(qjj, q_t), q_t);
+		}
+	}
+	auto inline s_householder_u2qmn(Size m, Size n, const double* U, double* Q)noexcept->void { s_householder_u2qmn(m, n, U, n, Q, n); }
+
+	//    R = f(U,tau)  where Q * R = A 
+	//
+	//    U :        m x n
+	//    R :        m x n
+	//
+	//    R can be the same address with U
+	template<typename UType, typename RType>
+	auto inline s_householder_u2r(Size m, Size n, const double* U, UType u_t, double* R, RType r_t)noexcept->void {
+		s_mc(m, n, U, u_t, R, r_t);
+		for (Size i(-1), rj1j{ next_r(0,r_t) }; ++i < std::min({ m - 1, m, n }); rj1j = next_d(rj1j, r_t)) {
+			s_fill(m - i - 1, 1, 0.0, R + rj1j, r_t);
+		}
+	}
+	auto inline s_householder_u2r(Size m, Size n, const double* U, double* R)noexcept->void { s_householder_u2r(m, n, U, n, R, n); }
+
+	// [Q,R]= f(U,tau)  where Q * R = A 
+	//
+	//    U :        m x n
+	//    Q :        m x m
+	//    R :        m x n
+	//
+	//    R can be the same address with U
+	template<typename UType, typename QType, typename RType>
+	auto inline s_householder_u2qr(Size m, Size n, const double* U, UType u_t, double* Q, QType q_t, double* R, RType r_t)noexcept->void {
+		s_householder_u2q(m, n, U, u_t, Q, q_t);
+		s_householder_u2r(m, n, U, u_t, R, r_t);
+	}
+	auto inline s_householder_u2qr(Size m, Size n, const double* U, double* Q, double* R)noexcept->void { s_householder_u2qr(m, n, U, n, Q, m, R, n); }
+
+
 	//    x = Q * b 
 	//
 	//    U :        m x n
@@ -1341,14 +1421,11 @@ namespace aris::dynamic{
 	}
 	auto inline s_householder_up_sov(Size m, Size n, Size rhs, Size rank, const double *U, const Size *p, const double *b, double *x, double zero_check = 1e-10)noexcept->void { s_householder_up_sov(m, n, rhs, rank, U, n, p, b, rhs, x, rhs, zero_check); }
 	
-	// tbd ....
 	//    U :        m x n
-	//  tau : max(m,n) x 1
 	//    p : max(m,n) x 1
 	//    x :        n x m
-	// tau2 : max(n,m) x 1
-	template<typename UType, typename TauType, typename XType, typename TauType2>
-	auto inline s_householder_up2pinv(Size m, Size n, Size rank, const double *U, UType u_t, const double *tau, TauType tau_t, const Size *p, double *x, XType x_t, double *tau2, TauType2 t_t, double zero_check = 1e-10)noexcept->void
+	template<typename UType, typename XType>
+	auto inline s_householder_up2pinv(aris::Size m, aris::Size n, aris::Size rank, const double* U, UType u_t, const aris::Size* p, double* x, XType x_t, double zero_check = 1e-10)noexcept->void
 	{
 		// X 是 A 的 moore penrose 逆，为 n x m 维
 		//
@@ -1452,17 +1529,19 @@ namespace aris::dynamic{
 		//
 
 		// QT
-		s_householder_ut2qmn(m, rank, U, u_t, tau, tau_t, x, T(x_t));
+		s_householder_u2qmn(m, rank, U, u_t, x, T(x_t));
+
 		// R1\QT
 		s_sov_um(rank, m, U, u_t, x + at(0, 0, x_t), x_t, x, x_t, zero_check);
+
 		// R1\R2
 		s_sov_um(rank, n - rank, U, u_t, U + at(0, rank, u_t), u_t, x + at(rank, 0, x_t), T(x_t), zero_check);
 
 		// step 2:
 		// 将通解矩阵做个行变换如下：
 		//
-		//     1           n-r         
-		//  1  [ -1          |           
+		//     1           n-r
+		//  1  [ -1          ]
 		//     |    -1       |
 		//     |       ..    |
 		//     |          -1 |
@@ -1495,35 +1574,31 @@ namespace aris::dynamic{
 		//
 		//
 		// make S and tau
-		for (Size i(-1), k0i{ at(0, rank, T(x_t)) }, ti{ 0 }; ++i < std::min({ n - rank, n, n - 1 }); k0i = next_c(k0i, T(x_t)), ti = next_r(ti, t_t))
-		{
+		for (Size i(-1), k0i{ at(0, rank, T(x_t)) }; ++i < std::min({ n - rank, n, n - 1 }); k0i = next_c(k0i, T(x_t))) {
 			double rho = std::sqrt(s_vv(rank, x + k0i, T(x_t), x + k0i, T(x_t)) + 1.0);
 
 			// Aii 为 -1.0
 			s_nv(rank, 1.0 / (-1.0 - rho), x + k0i, T(x_t));
-			tau2[ti] = -1.0 / rho - 1.0;
 
-			for (Size j(i), kij{ next_c(k0i,T(x_t)) }; ++j < n - rank; kij = next_c(kij, T(x_t)))
-			{
-				double k = tau2[ti] * (s_vv(rank, x + k0i, T(x_t), x + kij, T(x_t)));
+			double tau = (1.0 + s_vv(rank, x + k0i, T(x_t), x + k0i, T(x_t))) / 2;
+
+			for (Size j(i), kij{ next_c(k0i,T(x_t)) }; ++j < n - rank; kij = next_c(kij, T(x_t))) {
+				double k = (-1.0 / tau) * (s_vv(rank, x + k0i, T(x_t), x + kij, T(x_t)));
 				s_va(rank, k, x + k0i, T(x_t), x + kij, T(x_t));
 			}
-		}
 
-		// step 3:
-		// 利用S产生的QT来乘以R1\QT，S事实上为一个很大的矩阵，但其左下角很多为0，因此每一列只用做rank维的乘法
-		//
-		// x变成:
-		//   1           r         m
-		// 1 [                     ]
-		//   |     ST * (R1\QT)    |
-		// r |.....................|
-		//   |     S     .         |
-		// n [           .         ]  
-		//
-		for (Size i(-1), k0i{ at(0, rank, T(x_t)) }, ti{ 0 }; ++i < n - rank; k0i = next_c(k0i, T(x_t)), ti = next_r(ti, t_t)){
-			for (Size j(-1), x0j{ at(0, 0, x_t) }; ++j < m; x0j = next_c(x0j, x_t)){
-				double alpha = tau2[ti] * (s_vv(rank, x + k0i, T(x_t), x + x0j, x_t));
+			// step 3: 为减少循环，这里直接做乘法
+			// 利用S产生的QT来乘以R1\QT，S事实上为一个很大的矩阵，但其左下角很多为0，因此每一列只用做rank维的乘法
+			//
+			// x变成:
+			//   1           r         m
+			// 1 [                     ]
+			//   |     ST * (R1\QT)    |
+			// r |.....................|
+			//   |     S     .         |
+			// n [           .         ]
+			for (Size j(-1), x0j{ at(0, 0, x_t) }; ++j < m; x0j = next_c(x0j, x_t)) {
+				double alpha = (-1.0 / tau) * (s_vv(rank, x + k0i, T(x_t), x + x0j, x_t));
 				s_ma(rank, 1, alpha, x + k0i, T(x_t), x + x0j, x_t);
 			}
 		}
@@ -1538,30 +1613,53 @@ namespace aris::dynamic{
 		//   |   S * ST * (R1\QT)  |
 		//   |                     |
 		// n [                     ]
-		for (Size i(n - rank), k0i{ at(0, n - 1, T(x_t)) }, ti{ at(n - rank - 1, t_t) }; --i < n - rank; k0i = last_c(k0i, T(x_t)), ti = last_r(ti, t_t)){
-			// 因为需要少占内存，因此先将
-			for (Size j(-1), x0j{ at(0, 0, x_t) }, tj{ at(n - rank,t_t) }; ++j < rank; x0j = next_c(x0j, x_t), tj = next_r(tj, t_t))
-			{
-				double alpha = tau2[ti] * (s_vv(rank, x + k0i, T(x_t), x + x0j, x_t));
-				s_ma(rank, 1, alpha, x + k0i, T(x_t), x + x0j, x_t);
-				tau2[tj] = alpha;
-			}
-			for (Size j(rank - 1), x0j{ at(0, rank, x_t) }; ++j < m; x0j = next_c(x0j, x_t))
-			{
-				double alpha = tau2[ti] * (s_vv(rank, x + k0i, T(x_t), x + x0j, x_t));
+		for (Size i(n - rank), k0i{ at(0, n - 1, T(x_t)) }; --i < n - rank; k0i = last_c(k0i, T(x_t))) {
+			double tau = (1.0 + s_vv(rank, x + k0i, T(x_t), x + k0i, T(x_t))) / 2;
+
+			for (Size j(rank - 1), x0j{ at(0, rank, x_t) }; ++j < m; x0j = next_c(x0j, x_t)) {
+				double alpha = (-1.0 / tau) * (s_vv(rank, x + k0i, T(x_t), x + x0j, x_t));
 				s_ma(rank, 1, alpha, x + k0i, T(x_t), x + x0j, x_t);
 				x[at(i + rank, j, x_t)] = alpha;
 			}
 
-			s_vc(rank, tau2 + at(n - rank, t_t), t_t, x + k0i, T(x_t));
+			// 使用递归来降低内存分配 //
+			const auto& iter_func = [](auto&& self, Size m, Size n, Size i, Size j, Size x0j, Size k0i, Size rank, double tau, double* x, auto x_t)->void {
+				if (j >= rank)return;
+
+				const Size MEM_SIZE = 128;
+
+				double mem[MEM_SIZE];
+				Size real_size = std::min(Size(MEM_SIZE), rank - j);
+				for (Size k = 0; k < real_size; ++k) {
+					mem[k] = (-1.0 / tau) * (s_vv(rank, x + k0i, T(x_t), x + x0j, x_t));
+					s_ma(rank, 1, mem[k], x + k0i, T(x_t), x + x0j, x_t);
+					x0j = next_c(x0j, x_t);
+				}
+				self(self, m, n, i, j + real_size, x0j, k0i, rank, tau, x, x_t);
+				for (Size k = 0; k < real_size; ++k) {
+					x[at(j + k, i + rank, T(x_t))] = mem[k];
+				}
+
+				return;
+			};
+			iter_func(iter_func, m, n, i, 0, 0, k0i, rank, tau, x, x_t);
+
+			//for (Size j(-1), x0j{ at(0, 0, x_t) }, tj{ at(n - rank,t_t) }; ++j < rank; x0j = next_c(x0j, x_t), tj = next_r(tj, t_t)) {
+			//	double alpha = (-1.0/tau) * (s_vv(rank, x + k0i, T(x_t), x + x0j, x_t));
+			//	s_ma(rank, 1, alpha, x + k0i, T(x_t), x + x0j, x_t);
+			//	tau2[tj] = alpha;
+			//}
+			//s_vc(rank, tau2 + at(n - rank, t_t), t_t, x + k0i, T(x_t));
 		}
 
 		// step 5:
 		// permutate
 		s_permutate_inv(n, m, p, x, x_t);
 	}
-	auto inline s_householder_up2pinv(Size m, Size n, Size rank, const double *U, const double *tau, const Size *p, double *x, double *tau2, double zero_check = 1e-10)noexcept->void { s_householder_up2pinv(m, n, rank, U, n, tau, 1, p, x, m, tau2, 1, zero_check); }
-//#define ARIS_DEBUG_DYNAMIC_SVD
+	auto inline s_householder_up2pinv(aris::Size m, aris::Size n, aris::Size rank, const double* U, const aris::Size* p, double* x, double zero_check = 1e-10)noexcept->void { s_householder_up2pinv(m, n, rank, U, n, p, x, m, zero_check); }
+
+
+	//#define ARIS_DEBUG_DYNAMIC_SVD
 	// A = U * S * V^T
 	//
 	// 其中 U * U^T = I，V * V^T = I，S为对角矩阵，对角线元素降低且全为正值
@@ -3099,7 +3197,6 @@ namespace aris::dynamic{
 	//    y : y
 	//    z : z
 	//    p : 4 维向量， p1 x + p2 y + p3 z + p4 = 0，其中 p1 p2 p3 为单位向量
-	// tau2 : max(n,m) x 1
 	auto inline s_interp_plane(Size n, const double *x, const double *y, const double *z, double *plane_func)->void {
 		double avg_x{ 0.0 }, avg_y{ 0.0 }, avg_z{ 0.0 };
 

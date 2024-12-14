@@ -58,14 +58,15 @@ int main(int argc, char *argv[]){
 	//auto T_below = aris::plan::s_scurve_cpt_T_below(param);
 	
 	//test_move_follower();
-	//test_singular_processor();
-	test_trajectory();
+	//test_function();
+	test_singular_processor();
+	//test_trajectory();
 	
 
 	//test_scurve();
 	//test_path();
 	
-	//test_function();
+	
 
 
 	std::string program = 

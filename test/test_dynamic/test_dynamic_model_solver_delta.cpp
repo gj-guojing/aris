@@ -214,12 +214,10 @@ void test_model_solver_delta_full() {
 
 	double input_below[5]{ 0,0,0,0 }, input_upper[4]{ 2 * aris::PI,2 * aris::PI, 2 * aris::PI, 2 * aris::PI, };
 	test_model_kinematics_pos(*model, 30, input_below, input_upper);
-
-	std::cout << "-----------------test model solver delta finished------------" << std::endl << std::endl;
 }
 void test_model_solver_delta()
 {
-
+	std::cout << "-----------------test model solver delta------------" << std::endl << std::endl;
 	test_model_solver_delta_full();
 
 

@@ -29,7 +29,7 @@ namespace aris::plan{
 		auto dt()const->double;
 		auto setDt(double dt)->void;
 
-		// 真实世界的时间间隔 //
+		// 最大的重规划点数 //
 		auto maxReplanNum()const->int;
 		auto setMaxReplanNum(int max_replan_num = 10) -> void;
 
@@ -56,6 +56,9 @@ namespace aris::plan{
 		auto leftTotalS()const->double;
 
 		// 获取末端数据，并移动dt //
+		// return
+		//        0: 全部运行结束
+		//  node_id: 当前节点的 id 号，对应插入时的 id
 		auto getEePosAndMoveDt(double *ee_pos = nullptr, double *ee_vel = nullptr, double *ee_acc = nullptr)->std::int64_t;
 
 		// 插入新的数据，并重规划 //

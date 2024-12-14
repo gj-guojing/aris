@@ -2,6 +2,7 @@
 #include <iostream>
 #include <array>
 #include <aris/dynamic/dynamic.hpp>
+#include <aris/core/core.hpp>
 
 #include<type_traits>
 
@@ -238,13 +239,134 @@ void test_ur_vel() {
 	s_mma(6, 1, 6, fwd.Jf(), input_acc, result);
 	if (!s_is_equal(6, result, output_as, 1e-9))std::cout << "failed" << std::endl;
 }
+void test_ur_calib_dh() {
+	UrParam param;
+	param.H1 = 0.089159;
+	param.W1 = 0.13585 - 0.1197 + 0.093;
+	param.L1 = 0.425;
+	param.L2 = 0.39225;
+	param.H2 = -0.09465;
+	param.W2 = 0.0823;
+	auto m = aris::dynamic::createModelUr(param);
+	dynamic_cast<aris::dynamic::GeneralMotion&>(m->generalMotionPool()[0]).setPoseType(aris::dynamic::GeneralMotion::PoseType::EULER123);
+
+	// 待标定的真实值
+	double joint_error[6]{ 0.01,0.03,0.015,0.02,0.001,-0.02 };
+	double dh_with_error[6]{ 0.089159 + 0.01,  0.13585 - 0.1197 + 0.093 + 0.02, 0.425 + 0.025, 0.39225 + 0.02,  -0.09465-0.01, 0.0287 };
+
+	// make joint data //
+	const int n = 10;
+	double joint_pos_seen[n][6]{
+		{0.1,0.2,0.1,0.1,0.2,0.3},
+		{0.2,0.4,-0.3,0.5,0.2,0.3},
+		{0.3,0.6,0.3,0.8,0.2,0.3},
+		{0.3,0.8,-0.3,0.1,0.2,0.3},
+		{0.2,0.9,0.3,0.1,0.5,0.3},
+		{0.1,0.9,-0.3,0.1,0.8,0.3},
+		{0.1,0.8,0.3,0.1,0.2,0.3},
+		{0.2,0.7,-0.3,0.1,0.2,0.6},
+		{0.3,0.6,0.3,0.1,0.2,0.9},
+	};
+
+	// make 视觉数据 //
+	double pq_obj_in_eye[n][7];
+	{
+		// make fake robot //
+		UrParam param;
+		param.H1 = 0.089159;
+		param.W1 = 0.13585 - 0.1197 + 0.093;
+		param.L1 = 0.425;
+		param.L2 = 0.39225;
+		param.H2 = -0.09465;
+		param.W2 = 0.0823;
+		param.H1 = dh_with_error[0];
+		param.W1 = dh_with_error[1];
+		param.L1 = dh_with_error[2];
+		param.L2 = dh_with_error[3];
+		param.H2 = dh_with_error[4];
+		param.W2 = dh_with_error[5];
+
+		auto m = aris::dynamic::createModelUr(param);
+		dynamic_cast<aris::dynamic::GeneralMotion&>(m->generalMotionPool()[0]).setPoseType(aris::dynamic::GeneralMotion::PoseType::EULER123);
+
+		for (int i = 0; i < 6; ++i) {
+			m->motionPool()[i].setMpOffset(joint_error[i]);
+		}
+
+		m->init();
+		
+		// eye in tool //
+		const double pe_eye_in_tool[6]{ 0.1,0.2,0.3,0.111,0.221,0.832 };
+		double pq_eye_in_tool[7];
+		s_pe2pq(pe_eye_in_tool, pq_eye_in_tool, "321");
+
+		// obj in base //
+		const double pe_obj_in_base[6]{ 1.23,2.2,4.3,0.511,0.321,0.932 };
+		double pq_obj_in_base[7];
+		s_pe2pq(pe_obj_in_base, pq_obj_in_base, "321");
+
+		// make data
+		double pe_tool_in_base[n][6];
+		
+		// make joint data //
+		for (int i = 0; i < n; ++i) {
+			if (m->forwardKinematics(joint_pos_seen[i], pe_tool_in_base[i], 0))
+				std::cout << "failed" << std::endl;
+		}
+
+		double pq_tool_in_base[n][7];
+		// make eye data //
+		for (int i = 0; i < n; ++i) {
+			s_pe2pq(pe_tool_in_base[i], pq_tool_in_base[i], "123");
+			
+			double pq_eye_in_base[7];
+			s_pq_dot_pq(pq_tool_in_base[i], pq_eye_in_tool, pq_eye_in_base);
+
+			double pm_eye_in_base[16];
+			s_pq2pm(pq_eye_in_base, pm_eye_in_base);
+
+			s_inv_pq2pq(pm_eye_in_base, pq_obj_in_base, pq_obj_in_eye[i]);
+		}
+	}
+
+
+	CalibUrParam ur_param;
+	ur_param.dh_init[0] = param.H1;
+	ur_param.dh_init[1] = param.W1;
+	ur_param.dh_init[2] = param.L1;
+	ur_param.dh_init[3] = param.L2;
+	ur_param.dh_init[4] = param.H2;
+	ur_param.dh_init[5] = param.W2;
+
+	ur_param.mp_offset_init[0] = 0.0;
+	ur_param.mp_offset_init[1] = 0.0;
+	ur_param.mp_offset_init[2] = 0.0;
+	ur_param.mp_offset_init[3] = 0.0;
+	ur_param.mp_offset_init[4] = 0.0;
+	ur_param.mp_offset_init[5] = 0.0;
+
+	ur_param.n = n;
+	ur_param.pq_obj_in_eye = *pq_obj_in_eye;
+	ur_param.joint_pos = *joint_pos_seen;
+
+	aris::dynamic::calibUrParamBy3DEye(ur_param);
+
+	dsp(1, 6, ur_param.mp_offset_result);
+	dsp(1, 6, ur_param.dh_result);
+	dsp(1, 7, ur_param.eye_pq);
+	std::cout << ur_param.avg_obj_pos_err << "  " << ur_param.avg_obj_quad_err << std::endl;
+
+
+
+}
+
 
 void test_model_solver_ur()
 {
 	std::cout << std::endl << "-----------------test model solver ur-----------------------" << std::endl;
 
 
-
+	test_ur_calib_dh();
 	test_ur_forward_solver();
 	test_ur_inverse_solver();
 	test_ur_vel();
@@ -338,6 +460,6 @@ void test_model_solver_ur()
 	//dynamic_cast<aris::dynamic::GeneralMotion&>(m1->generalMotionPool().at(0)).setMpe(std::array<double, 6>{0.38453, 0, 0.6294, 0.0001, 0 + aris::PI/2, 0}.data(), "321");
 	//m1->solverPool().at(0).kinPos();
 
-	std::cout << "-----------------test model solver puma finished------------" << std::endl << std::endl;
+	std::cout << "-----------------test model solver ur finished------------" << std::endl << std::endl;
 }
 

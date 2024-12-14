@@ -272,15 +272,15 @@ namespace aris::core
 
 			if (m1.imp_->is_row_major_){
 				if (m2.imp_->is_row_major_)
-					aris::core::s_mm(m1.m(), m2.n(), m1.n(), m1.data(), 1, m2.data(), 1, ret.data(), 1);
+					aris::core::s_mm(m1.m(), m2.n(), m1.n(), m1.data(), m1.n(), m2.data(), m2.n(), ret.data(), ret.n());
 				else
-					aris::core::s_mmNT(m1.m(), m2.n(), m1.n(), m1.data(), 1, m2.data(), 1, ret.data(), 1);
+					aris::core::s_mmNT(m1.m(), m2.n(), m1.n(), m1.data(), m1.n(), m2.data(), m2.m(), ret.data(), ret.n());
 			}
 			else{
 				if (m2.imp_->is_row_major_)
-					aris::core::s_mmTN(m1.m(), m2.n(), m1.n(), m1.data(), 1, m2.data(), 1, ret.data(), 1);
+					aris::core::s_mmTN(m1.m(), m2.n(), m1.n(), m1.data(), m1.m(), m2.data(), m2.n(), ret.data(), ret.n());
 				else
-					aris::core::s_mmTT(m1.m(), m2.n(), m1.n(), m1.data(), 1, m2.data(), 1, ret.data(), 1);
+					aris::core::s_mmTT(m1.m(), m2.n(), m1.n(), m1.data(), m1.m(), m2.data(), m2.m(), ret.data(), ret.n());
 			}
 		}
 		else{

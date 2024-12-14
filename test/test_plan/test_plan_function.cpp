@@ -288,11 +288,328 @@ void test_moveAbsolute2()
 	//}
 }
 
+void test_s_is_in_vavg_boundage_1_dof() {
+
+	{
+		double v0 = 0;
+		double v1 = 1;
+		double v_avg= 0.124999999;
+		double a_max = 100, a_min = -100;
+		double dt = 0.02;
+
+		if (s_is_in_vavg_boundage(v0, v1, v_avg, a_max, a_min, dt))
+			std::cout << "test \"s_is_in_vavg_boundage\" failed : " << __FILE__ << " line: " << __LINE__ << std::endl;
+	}
+
+	{
+		double v0 = 0;
+		double v1 = 1;
+		double v_avg = 0.125000001;
+		double a_max = 100, a_min = -100;
+		double dt = 0.02;
+
+		if (!s_is_in_vavg_boundage(v0, v1, v_avg, a_max, a_min, dt))
+			std::cout << "test \"s_is_in_vavg_boundage\" failed : " << __FILE__ << " line: " << __LINE__ << std::endl;
+	}
+
+	{
+		double v0 = 0;
+		double v1 = 1;
+		double v_avg = 0.874999999;
+		double a_max = 100, a_min = -100;
+		double dt = 0.02;
+
+		if (!s_is_in_vavg_boundage(v0, v1, v_avg, a_max, a_min, dt))
+			std::cout << "test \"s_is_in_vavg_boundage\" failed : " << __FILE__ << " line: " << __LINE__ << std::endl;
+	}
+
+	{
+		double v0 = 0;
+		double v1 = 1;
+		double v_avg = 0.875000001;
+		double a_max = 100, a_min = -100;
+		double dt = 0.02;
+
+		if (s_is_in_vavg_boundage(v0, v1, v_avg, a_max, a_min, dt))
+			std::cout << "test \"s_is_in_vavg_boundage\" failed : " << __FILE__ << " line: " << __LINE__ << std::endl;
+	}
+
+	{
+		double v0 = 0;
+		double v1 = 1;
+		double v_avg = 0.9499999999;
+		double a_max = 100, a_min = -50;
+		double dt = 0.025;
+
+		if (!s_is_in_vavg_boundage(v0, v1, v_avg, a_max, a_min, dt))
+			std::cout << "test \"s_is_in_vavg_boundage\" failed : " << __FILE__ << " line: " << __LINE__ << std::endl;
+	}
+
+	{
+		double v0 = 0;
+		double v1 = 1;
+		double v_avg = 0.950000001;
+		double a_max = 100, a_min = -50;
+		double dt = 0.025;
+
+		if (s_is_in_vavg_boundage(v0, v1, v_avg, a_max, a_min, dt))
+			std::cout << "test \"s_is_in_vavg_boundage\" failed : " << __FILE__ << " line: " << __LINE__ << std::endl;
+	}
+
+	{
+		double v0 = 1;
+		double v1 = 0;
+		double v_avg = 0.9499999999;
+		double a_max = 50, a_min = -100;
+		double dt = 0.025;
+
+		if (!s_is_in_vavg_boundage(v0, v1, v_avg, a_max, a_min, dt))
+			std::cout << "test \"s_is_in_vavg_boundage\" failed : " << __FILE__ << " line: " << __LINE__ << std::endl;
+	}
+
+	{
+		double v0 = 1;
+		double v1 = 0;
+		double v_avg = 0.950000001;
+		double a_max = 50, a_min = -100;
+		double dt = 0.025;
+
+		if (s_is_in_vavg_boundage(v0, v1, v_avg, a_max, a_min, dt))
+			std::cout << "test \"s_is_in_vavg_boundage\" failed : " << __FILE__ << " line: " << __LINE__ << std::endl;
+	}
+}
+
+void test_s_is_in_vavg_boundage() {
+
+	{
+		double v0[3]{ 0,0.1,0.2 };
+		double v1[3]{ 1,0.1,0.2 };
+		double v_avg[3]{ 0.124999999,0.1,0.2 };
+		double a = 100;
+		double dt = 0.02;
+
+		if (s_is_in_vavg_boundage(v0, v1, v_avg, a, dt))
+			std::cout << "test \"s_is_in_vavg_boundage\" failed : " << __FILE__ << " line: " << __LINE__ << std::endl;
+	}
+
+	{
+		double v0[3]{ 0,0.1,0.2 };
+		double v1[3]{ 1,0.1,0.2 };
+		double v_avg[3]{ 0.1250000001,0.1,0.2 };
+		double a = 100;
+		double dt = 0.02;
+
+		if (!s_is_in_vavg_boundage(v0, v1, v_avg, a, dt))
+			std::cout << "test \"s_is_in_vavg_boundage\" failed : " << __FILE__ << " line: " << __LINE__ << std::endl;
+	}
+
+	{
+		double v0[3]{ 0,0.1,0.2 };
+		double v1[3]{ 1,0.1,0.2 };
+		double v_avg[3]{ 0.124999999,0.1,0.2 };
+		double a = 100;
+		double dt = 0.02;
+
+		if (s_is_in_vavg_boundage(v0, v1, v_avg, a, dt))
+			std::cout << "test \"s_is_in_vavg_boundage\" failed : " << __FILE__ << " line: " << __LINE__ << std::endl;
+	}
+
+	{
+		double v1[3]{ 0,0.1,0.2 };
+		double v0[3]{ 1,0.1,0.2 };
+		double v_avg[3]{ 0.1250000001,0.1,0.2 };
+		double a = 100;
+		double dt = 0.02;
+
+		if (!s_is_in_vavg_boundage(v0, v1, v_avg, a, dt))
+			std::cout << "test \"s_is_in_vavg_boundage\" failed : " << __FILE__ << " line: " << __LINE__ << std::endl;
+	}
+
+	{
+		double v0[3]{ 0,0.1,0.2 };
+		double v1[3]{ 1,0.1,0.2 };
+		double v_avg[3]{ 0.87500001,0.1,0.2 };
+		double a = 100;
+		double dt = 0.02;
+
+		if (s_is_in_vavg_boundage(v0, v1, v_avg, a, dt))
+			std::cout << "test \"s_is_in_vavg_boundage\" failed : " << __FILE__ << " line: " << __LINE__ << std::endl;
+	}
+
+	{
+		double v0[3]{ 0,0.1,0.2 };
+		double v1[3]{ 1,0.1,0.2 };
+		double v_avg[3]{ 0.874999999,0.1,0.2 };
+		double a = 100;
+		double dt = 0.02;
+
+		if (!s_is_in_vavg_boundage(v0, v1, v_avg, a, dt))
+			std::cout << "test \"s_is_in_vavg_boundage\" failed : " << __FILE__ << " line: " << __LINE__ << std::endl;
+	}
+
+	{
+		double v0[3]{ 0,0.1,0.2 };
+		double v1[3]{ 1,0.1,0.2 };
+		double v_avg[3]{ 0.5,0.2250000001,0.2 };
+		double a = 100;
+		double dt = 0.02;
+
+		if(s_is_in_vavg_boundage(v0, v1, v_avg, a, dt))
+			std::cout << "test \"s_is_in_vavg_boundage\" failed : " << __FILE__ << " line: " << __LINE__ << std::endl;
+	}
+
+	{
+		double v0[3]{ 0,0.1,0.2 };
+		double v1[3]{ 1,0.1,0.2 };
+		double v_avg[3]{ 0.5,0.224999999,0.2 };
+		double a = 100;
+		double dt = 0.02;
+
+		if (!s_is_in_vavg_boundage(v0, v1, v_avg, a, dt))
+			std::cout << "test \"s_is_in_vavg_boundage\" failed : " << __FILE__ << " line: " << __LINE__ << std::endl;
+	}
+
+}
+void test_follow_single_variable()
+{
+	{
+		double pt = 0.4000078;
+		double vt = 0.0;
+		double at = 0.0;
+		double pa = 0.4;
+		double va = 1e-10;
+		double aa = 1.86295223741914;
+		double vm = 0.10297442; // 295.0 / 360 * 2 * aris::PI * 0.02
+		double am = 2.09439512; // 1500.0 / 360 * 2 * aris::PI *0.01
+
+		double vmax = 100;
+		double vmin = -50;
+
+		double amax = 60;
+		double amin = -40;
+
+		double dt = 1e-3;
+		double zero_check = 1e-10;
+		double pc = pa, vc, ac;
+		aris::Size total_count;
+		aris::plan::s_follow_x(pa, va, pt, vmax, vmin, amax, amin, dt, zero_check, pc, vc, ac, total_count);
+	}
+	
+	
+	
+	
+	
+	
+	/*
+	{
+		//0.4, 0.00186295223741914, 1.86295223741914, 0.4, 0.10297442, 2.09439512, 0.400000931476119, 0, -1.86295223741914, 1
+		double pt = 0.4000078;
+		double vt = 0.0;
+		double at = 0.0;
+		double pa = 0.4;
+		double va = 1e-10;
+		double aa = 1.86295223741914;
+		double vm = 0.10297442; // 295.0 / 360 * 2 * aris::PI * 0.02
+		double am = 2.09439512; // 1500.0 / 360 * 2 * aris::PI *0.01
+
+		double vmax = 100;
+		double vmin = -50;
+
+		double amax = 60;
+		double amin = -40;
+
+		double dt = 1e-3;
+		double zero_check = 1e-10;
+		double pc = pa, vc, ac;
+		aris::Size total_count;
+
+		while (std::abs(pt - pc) > zero_check) {
+
+			aris::plan::s_follow_x(pa, va, pt, vmax, vmin, amax, amin, dt, zero_check, pc, vc, ac, total_count);
+			std::cout << "pos : " << pc << "   " << vc << "   " << ac << std::endl;
+
+
+			pa = pc;
+			va = vc;
+		}
+	
+	}
+	*/
+	{
+		double pt = 0.4000078;
+		double vt = 0.0;
+		double at = 0.0;
+		double pa = 0.4;
+		double va = 5.3;
+		double aa = 1.86295223741914;
+		double vm = 0.10297442; // 295.0 / 360 * 2 * aris::PI * 0.02
+		double am = 2.09439512; // 1500.0 / 360 * 2 * aris::PI *0.01
+
+		double vmax = 100;
+		double vmin = -50;
+
+		double amax = 60;
+		double amin = -40;
+
+		double dt = 1e-3;
+		double zero_check = 1e-10;
+		double pc = pa, vc =0, ac;
+		aris::Size total_count;
+
+		int i = 0;
+		while (std::abs(pt - pc) > zero_check) {
+
+			//if (pc > 0.25 && vc > 3.3)
+			//	std::cout << "debug" << std::endl;
+
+			if (i > 299)
+				std::cout << "debug" << std::endl;
+
+			aris::plan::s_follow_x(pa, va, pt, vmax, vmin, amax, amin, dt, zero_check, pc, vc, ac, total_count);
+			std::cout<<"time " << i << ":   " << "left count:"<< total_count << "  pos : " << pc << "   " << vc << "   " << ac << std::endl;
+			++i;
+
+
+
+			pa = pc;
+			va = vc;
+		}
+
+
+		std::cout << "end" << std::endl;
+	}
+
+
+	
+
+
+
+
+
+		//aris::plan::moveAbsolute2(pa, va, aa, pt, vt, at, vm, am, am, 1e-3, 1e-10, pa, va, aa, total_count);
+
+	//n = 5;
+	//while (--n)
+	//{
+	//	aris::Size t;
+	//	aris::plan::moveAbsolute2(pa, va, aa, pt, vt, at, vm, am, am, 1e-3, 1e-10, pa, va, aa, t);
+
+	//	//p_vec.push_back(pa);
+	//	//v_vec.push_back(va);
+	//	//a_vec.push_back(aa);
+
+	//	std::cout << "p:" << pa << "  v:" << va << "  a:" << aa << std::endl;
+	//}
+}
+
 void test_function()
 {
 	std::cout << std::endl << "-----------------test function---------------------" << std::endl;
 	//test_optimal();
-	test_moveAbsolute2();
+	//test_moveAbsolute2();
+	//test_s_is_in_vavg_boundage_1_dof();
+	//test_s_is_in_vavg_boundage();
+	test_follow_single_variable();
 	std::cout << "-----------------test function finished------------" << std::endl << std::endl;
 }
 

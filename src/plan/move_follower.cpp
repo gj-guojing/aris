@@ -12,7 +12,7 @@ namespace aris::plan {
 	// 判断是否可行
 	//
 	// 一般来说，v_avg 是根据位置算出的，但是起始和末端的速度还有约束，因此需要判断是否能够同时满足
-	auto s_is_in_vavg_boundage(const double* v0, const double* v1, const double *v_avg, double a, double dt, double *dis = nullptr, double *r = nullptr)->bool {
+	auto s_is_in_vavg_boundage(const double* v0, const double* v1, const double *v_avg, double a, double dt, double *dis, double *r, double zero_check)->bool {
 		// input check //
 		double dis_, r_;
 		dis = dis ? dis : &dis_;
@@ -21,10 +21,10 @@ namespace aris::plan {
 		// cpt r //
 		double v_diff[3]{ v1[0] - v0[0],v1[1] - v0[1] ,v1[2] - v0[2] };
 		double t1 = aris::dynamic::s_norm(3, v_diff) / a;
-		*r = (dt - t1) / 2 * a;
+		*r = (dt - t1) * a / 4;   // r是平均速度的偏移，小于峰值速度的一半
 
 		// too small margin //
-		if (std::abs(dt - t1) < 1e-10) {
+		if (std::abs(dt - t1) < zero_check) {
 			double result[3]{
 				v_avg[0] - (v0[0] + v1[0]) / 2,
 				v_avg[1] - (v0[1] + v1[1]) / 2,
@@ -51,14 +51,14 @@ namespace aris::plan {
 
 		// 正常情况需求 vb 偏离  v0 -> v1 这根轴的距离
 		double a_dir[3]{
-			v_avg[0] - v0[0],
-			v_avg[1] - v0[1],
-			v_avg[2] - v0[2],
+			vavg_left[0] - v0[0],
+			vavg_left[1] - v0[1],
+			vavg_left[2] - v0[2],
 		};
 		double b_dir[3]{
-			v_avg[0] - v1[0],
-			v_avg[1] - v1[1],
-			v_avg[2] - v1[2],
+			vavg_left[0] - v1[0],
+			vavg_left[1] - v1[1],
+			vavg_left[2] - v1[2],
 		};
 		double c_dir[3]{
 			v1[0] - v0[0],
@@ -66,7 +66,7 @@ namespace aris::plan {
 			v1[2] - v0[2],
 		};
 
-		if (s_norm(3, c_dir) < 1e-10 || s_vv(3, a_dir, c_dir) < 0.0) {
+		if (s_norm(3, c_dir) < zero_check || s_vv(3, a_dir, c_dir) < 0.0) {
 			*dis = s_norm(3, a_dir);
 		}
 		else if (s_vv(3, b_dir, c_dir) > 0.0) {
@@ -217,13 +217,9 @@ namespace aris::plan {
 		s_pp2pm(follow_xyz, imp_->follow_pm_);
 		s_vc(3, follow_v, imp_->follow_va_);
 
-
-
 		// 返回 follow_xyz //
 		s_vc(16, imp_->follow_pm_, follow_pm);
 		s_vc(6, imp_->follow_va_, follow_va);
-
-		
 	}
 	// 估算完全追踪上所需要的时间 //
 	auto MoveFollower::estimateLeftT()->double {

@@ -2,6 +2,117 @@
 
 namespace aris::plan{
 	auto newton_raphson_binary_search(std::function<double(double)> f, double x_below, double x_upper)->double;
+	
+	auto s_poly2_solve(double k2, double k1, double k0, double* x) -> int {
+		if (std::abs(k2) < 1e-10) {
+			x[0] = -k0 / k1;
+			return 1;
+		}
+
+		auto b2_4ac = k1 * k1 - 4 * k2 * k0;
+		if (b2_4ac < 0) {
+			return 0;
+		}
+
+		x[0] = (-k1 - std::sqrt(b2_4ac)) / (2 * k2);
+		x[1] = (-k1 + std::sqrt(b2_4ac)) / (2 * k2);
+
+		if (k2 < 0)
+			std::swap(x[0], x[1]);
+
+	}
+
+	// solve k3*x^3 + k2*x^2 + k1*x + k0 == 0
+	//
+	// return solution num
+	auto s_poly3_solve(double k3, double k2, double k1, double k0, double *x) -> int {
+		
+		// diff is:
+		// 3*k3*x^2 + 2*k2*x + k1
+
+		double A = 3 * k3;
+		double B = 2 * k2;
+		double C = k1;
+
+		auto func = [k3, k2, k1, k0](double x) -> double {
+			return k3 * x * x * x + k2 * x * x + k1 * x + k0;
+		};
+
+
+		double ext[2]{};
+		if (auto ext_num = s_poly2_solve(A, B, C, ext); ext_num == 0) {
+			double lhs = -1.0, rhs = 1.0;
+			while (func(lhs) * func(rhs) > 0) {
+				lhs *= 2;
+				rhs *= 2;
+			}
+
+			x[0] = newton_raphson_binary_search(func, lhs, rhs);
+
+			return 1;
+		}
+		else if (ext_num == 1) {
+			x[0] = ext[0];
+			return ext_num;
+		
+		}
+		else {
+			
+
+			double fe1 = func(ext[0]);
+			double fe2 = func(ext[1]);
+
+			
+
+			// 1个根 //
+			if (fe1 * fe2 > 0.0) {
+				double value = aris::dynamic::s_sgn2(k3 * fe1);
+				double last_bound = ext[0];
+				double bound(last_bound - value);
+				while (func(bound) * fe1 > 0) {
+					value *= 2;
+					bound -= value;
+					last_bound = bound;
+				}
+
+				x[0] = newton_raphson_binary_search(func, std::min(bound, last_bound), std::max(bound, last_bound));
+				return 1;
+			
+			}
+			else {
+				// 3个根
+				double lhs(ext[0] - 1), rhs(ext[1] + 1);
+				
+				double value = 1.0;
+				while (func(lhs) * fe1 > 0) {
+					value *= 2;
+					lhs -= value;
+				}
+
+				value = 1.0;
+				while (func(rhs) * fe2 > 0) {
+					value *= 2;
+					rhs += value;
+				}
+
+				x[0] = newton_raphson_binary_search(func, lhs, ext[0]);
+				x[1] = newton_raphson_binary_search(func, ext[0], ext[1]);
+				x[2] = newton_raphson_binary_search(func, ext[1], rhs);
+				return 3;
+			}
+		
+		}
+
+
+
+
+
+
+
+
+	}
+
+
 
 	// 使用3阶bezier曲线，控制点为：[p0, p1, p1, p2]
 	auto s_bezier3_blend_line_line(double s,
@@ -201,9 +312,9 @@ namespace aris::plan{
 	{
 		// 将q1用单位四元数代替 //
 		double q0[4], q2[4], inv_q1[4];
-		aris::dynamic::s_inv_q(q1_input, inv_q1);
-		aris::dynamic::s_q_dot_q(inv_q1, q0_input, q0);
-		aris::dynamic::s_q_dot_q(inv_q1, q2_input, q2);
+		aris::dynamic::s_inv_rq(q1_input, inv_q1);
+		aris::dynamic::s_rq_dot_rq(inv_q1, q0_input, q0);
+		aris::dynamic::s_rq_dot_rq(inv_q1, q2_input, q2);
 
 		// 将q0 和 q2 放到距离 q1较小的arc上
 		if (q0[3] < 0)
@@ -308,22 +419,22 @@ namespace aris::plan{
 
 		// qb3 dqb3 d2qb3 // 
 		double qb3[4], dqb3[4], d2qb3[4];
-		aris::dynamic::s_q_dot_q(qb1, qb2, qb3);
+		aris::dynamic::s_rq_dot_rq(qb1, qb2, qb3);
 
 		double tem4[4];
-		aris::dynamic::s_q_dot_q(qb1, dqb2, dqb3);
-		aris::dynamic::s_q_dot_q(dqb1, qb2, tem4);
+		aris::dynamic::s_rq_dot_rq(qb1, dqb2, dqb3);
+		aris::dynamic::s_rq_dot_rq(dqb1, qb2, tem4);
 		aris::dynamic::s_va(4, tem4, dqb3);
 
-		aris::dynamic::s_q_dot_q(qb1, d2qb2, d2qb3);
-		aris::dynamic::s_q_dot_q(d2qb1, qb2, tem4);
+		aris::dynamic::s_rq_dot_rq(qb1, d2qb2, d2qb3);
+		aris::dynamic::s_rq_dot_rq(d2qb1, qb2, tem4);
 		aris::dynamic::s_va(4, tem4, d2qb3);
-		aris::dynamic::s_q_dot_q(dqb1, dqb2, tem4);
+		aris::dynamic::s_rq_dot_rq(dqb1, dqb2, tem4);
 		aris::dynamic::s_va(4, 2.0, tem4, d2qb3);
 
 		// theta_b3 & vb3 //
 		double theta_b3, vb3[3], dtheta_b3, dvb3[3], d2theta_b3, d2vb3[3];
-		aris::dynamic::s_q_to_theta_v(qb3, dqb3, d2qb3, theta_b3, vb3, dtheta_b3, dvb3, d2theta_b3, d2vb3);
+		aris::dynamic::s_rq_to_theta_v(qb3, dqb3, d2qb3, theta_b3, vb3, dtheta_b3, dvb3, d2theta_b3, d2vb3);
 
 		// qb3 dqb3 d2qb3 //
 		double qb[4], dqb[4], d2qb[4];
@@ -355,22 +466,22 @@ namespace aris::plan{
 		double q_[4], dq_[4], d2q_[4];
 
 
-		aris::dynamic::s_q_dot_q(qa, qb, q_);
+		aris::dynamic::s_rq_dot_rq(qa, qb, q_);
 
-		aris::dynamic::s_q_dot_q(qa, dqb, dq_);
-		aris::dynamic::s_q_dot_q(dqa, qb, tem4);
+		aris::dynamic::s_rq_dot_rq(qa, dqb, dq_);
+		aris::dynamic::s_rq_dot_rq(dqa, qb, tem4);
 		aris::dynamic::s_va(4, tem4, dq_);
 
-		aris::dynamic::s_q_dot_q(qa, d2qb, d2q_);
-		aris::dynamic::s_q_dot_q(d2qa, qb, tem4);
+		aris::dynamic::s_rq_dot_rq(qa, d2qb, d2q_);
+		aris::dynamic::s_rq_dot_rq(d2qa, qb, tem4);
 		aris::dynamic::s_va(4, tem4, d2q_);
-		aris::dynamic::s_q_dot_q(dqa, dqb, tem4);
+		aris::dynamic::s_rq_dot_rq(dqa, dqb, tem4);
 		aris::dynamic::s_va(4, 2.0, tem4, d2q_);
 
 		// make real q1 //
-		aris::dynamic::s_q_dot_q(q1_input, q_, q);
-		aris::dynamic::s_q_dot_q(q1_input, dq_, dq);
-		aris::dynamic::s_q_dot_q(q1_input, d2q_, d2q);
+		aris::dynamic::s_rq_dot_rq(q1_input, q_, q);
+		aris::dynamic::s_rq_dot_rq(q1_input, dq_, dq);
+		aris::dynamic::s_rq_dot_rq(q1_input, d2q_, d2q);
 	}
 
 	auto s_bezier3_darc_ds(Size dim, const double* dp_ds_input, const double* d2p_ds2_input,

@@ -1,0 +1,65 @@
+<ControlServer>
+    <Model __prop_name__="model" name="object" time="0">
+        <Environment __prop_name__="environment" gravity="{0,-9.8,0,0,0,0}"/>
+        <VariablePoolElement __prop_name__="variable_pool"/>
+        <PartPoolElement __prop_name__="part_pool">
+            <Part name="ground" active="true" pe="{0,0,0,-0,0,-0}" vel="{0,0,0,0,0,0}" acc="{0,0,0,0,0,0}" inertia="{1,0,0,0,1,1,1,0,0,0}">
+                <MarkerPoolElement __prop_name__="marker_pool"/>
+                <GeometryPoolElement __prop_name__="geometry_pool"/>
+            </Part>
+        </PartPoolElement>
+        <MotionPoolElement __prop_name__="motion_pool"/>
+        <JointPoolElement __prop_name__="joint_pool"/>
+        <GeneralMotionPoolElement __prop_name__="general_motion_pool"/>
+        <ForcePoolElement __prop_name__="force_pool"/>
+        <SolverPoolElement __prop_name__="solver_pool"/>
+        <CalibratorPoolElement __prop_name__="calibrator_pool"/>
+    </Model>
+    <Master __prop_name__="master" name="master" sample_period_ns="1000000">
+        <SlavePoolObject __prop_name__="slave_pool"/>
+    </Master>
+    <Controller __prop_name__="controller">
+        <MotorPoolObject __prop_name__="motor_pool"/>
+        <DigitalIoPoolObject __prop_name__="digital_io_pool"/>
+        <AnalogIoPoolObject __prop_name__="analog_io_pool"/>
+        <FtSensorPoolObject __prop_name__="ft_sensor_pool"/>
+    </Controller>
+    <PlanRoot __prop_name__="plan_root">
+        <PlanPoolObject __prop_name__="plan_pool_object">
+            <CalibEyeInHandPlan name="plan">
+                <Command __prop_name__="command" name="calib_eye_in_hand">
+                    <GroupParam name="group_param">
+                        <Param name="limit_time" default="5000"/>
+                        <Param name="rbt_pes" default="{0,0,0,0,0,0}"/>
+                        <Param name="vis_pes" default="{0,0,0,0,0,0}"/>
+                        <Param name="rbt_pos_unit" default="mm"/>
+                        <Param name="rbt_angle_unit" default="deg"/>
+                        <Param name="vis_pos_unit" default="mm"/>
+                        <Param name="vis_angle_unit" default="rad"/>
+                        <Param name="clb_pos_unit" default="m"/>
+                        <Param name="clb_angle_unit" default="rad"/>
+                        <Param name="max_clb_pos_err" default="0.01"/>
+                        <Param name="max_clb_angle_err" default="0.05"/>
+                        <Param name="mech_path" default="extri_param.json"/>
+                    </GroupParam>
+                </Command>
+            </CalibEyeInHandPlan>
+            <SysCmdPlan name="plan">
+                <Command __prop_name__="command" name="sys_cmd">
+                    <GroupParam name="group_param">
+                        <Param name="call" default="aaa"/>
+                    </GroupParam>
+                </Command>
+            </SysCmdPlan>
+        </PlanPoolObject>
+    </PlanRoot>
+    <InterfacePoolObject __prop_name__="interface">
+        <WebInterface name="tcp_interface">
+            <Socket __prop_name__="socket" connect_type="TCP" port="5870"/>
+        </WebInterface>
+    </InterfacePoolObject>
+    <MiddleWare __prop_name__="middle_ware"/>
+    <TransferModelController __prop_name__="model_controller_transfer"/>
+    <CustomModule __prop_name__="custom_module"/>
+    <ControlServerErrorChecker __prop_name__="error_checker"/>
+</ControlServer>

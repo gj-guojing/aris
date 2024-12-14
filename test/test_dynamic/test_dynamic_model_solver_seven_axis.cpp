@@ -219,8 +219,9 @@ void test_seven_axis_inverse_solver3()
 }
 void test_model_solver_seven_axis()
 {
+	
 	std::cout << std::endl << "-----------------test model solver seven_axis---------------------" << std::endl;
-	test_seven_axis_inverse_solver2();
+	test_seven_axis_inverse_solver();
 	//test_seven_axis_inverse_solver3();
 
 

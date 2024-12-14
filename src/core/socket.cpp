@@ -63,21 +63,15 @@
                                                                                          "Socket Close 关闭错误：%d"}
 
 namespace aris::core{
-	auto close_sock(decltype(socket(AF_INET, SOCK_STREAM, 0)) s)->int{
-#ifdef WIN32
-		auto ret = closesocket(s);
-#endif
-#ifdef UNIX
-		auto ret = close(s);
-#endif
-		return ret;
-	}
+	auto aris_send(SOCKET_T sock, const char* buf, int len, int flag) -> int;
+	auto aris_close(SOCKET_T sock) -> int;
+
 	auto safe_recv(decltype(socket(AF_INET, SOCK_STREAM, 0)) s, char *data, int size) -> int{
 		int result{ 0 };
 		for (; result < size; ){
 			int ret = recv(s, data + result, size - result, 0);
 			if (ret <= 0){
-				close_sock(s);
+				aris_close(s);
 				result = ret;
 				break;
 			}
@@ -272,11 +266,11 @@ namespace aris::core{
 			// 需要用close_lck 来确保本段代码不会被stop中断 //
 			std::unique_lock<std::recursive_mutex> close_lck(close_mutex_, std::defer_lock);
 			if (!close_lck.try_lock()){
-				close_sock(recv_socket_);
+				aris_close(recv_socket_);
 			}
 			else{
 				shutdown(recv_socket_, 2);
-				close_sock(recv_socket_);
+				aris_close(recv_socket_);
 				
 				std::unique_lock<std::recursive_mutex> state_lck(state_mutex_);
 				state_ = State::IDLE;
@@ -306,7 +300,7 @@ namespace aris::core{
 				
 				std::unique_lock<std::recursive_mutex> close_lck(imp->close_mutex_, std::defer_lock);
 				if (!close_lck.try_lock()){
-					close_sock(imp->lisn_socket_);
+					aris_close(imp->lisn_socket_);
 					imp->state_ = State::IDLE;
 					imp->accept_thread_.detach();
 					return;
@@ -320,14 +314,12 @@ namespace aris::core{
 			}
 
 			if (imp->type_ == Type::WEB || imp->type_ == Type::WEB_RAW){
-				std::this_thread::sleep_for(std::chrono::seconds(3));
-				
 				char recv_data[1024]{ 0 };
 				int res = recv(imp->recv_socket_, recv_data, 1024, 0);
 				if (res <= 0){
 					ARIS_LOG(WEBSOCKET_SHAKE_HAND_FAILED, res);
 					shutdown(imp->recv_socket_, 2);
-					close_sock(imp->recv_socket_);
+					aris_close(imp->recv_socket_);
 					continue;
 				}
 
@@ -339,7 +331,7 @@ namespace aris::core{
 				catch (std::exception &){
 					ARIS_LOG(WEBSOCKET_SHAKE_HAND_FAILED_INVALID_KEY);
 					shutdown(imp->recv_socket_, 2);
-					close_sock(imp->recv_socket_);
+					aris_close(imp->recv_socket_);
 					continue;
 				}
 				server_key += "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -365,12 +357,12 @@ namespace aris::core{
 					"Connection: Upgrade\r\n"
 					"Sec-WebSocket-Accept: " + ret_hey + std::string("\r\n\r\n");
 
-				auto ret = send(imp->recv_socket_, shake_hand.c_str(), static_cast<int>(shake_hand.size()), 0);
+				auto ret = aris_send(imp->recv_socket_, shake_hand.c_str(), static_cast<int>(shake_hand.size()), 0);
 				
 				if (ret == -1){
 					ARIS_LOG(WEBSOCKET_SHAKE_HAND_FAILED_LOOSE_CONNECTION);
 					shutdown(imp->recv_socket_, 2);
-					close_sock(imp->recv_socket_);
+					aris_close(imp->recv_socket_);
 					continue;
 				};
 			}
@@ -379,7 +371,7 @@ namespace aris::core{
 		}
 		
 		shutdown(imp->lisn_socket_, 2);
-		close_sock(imp->lisn_socket_);
+		aris_close(imp->lisn_socket_);
 
 		// 否则,开始开启数据线程 //
 		if (imp->onReceivedConnection)imp->onReceivedConnection(imp->socket_, inet_ntoa(imp->client_addr_.sin_addr), ntohs(imp->client_addr_.sin_port));
@@ -440,7 +432,7 @@ namespace aris::core{
 				char data[1024];
 				int ret = recv(imp->recv_socket_, data, 1024, 0);
 				if (ret <= 0) {
-					close_sock(imp->recv_socket_);
+					aris_close(imp->recv_socket_);
 					imp->lose_tcp(); return;
 				}
 				if (ret > 0 && imp->onReceivedData)imp->onReceivedData(imp->socket_, data, ret);
@@ -622,7 +614,7 @@ namespace aris::core{
 			break;
 		case State::WAITING_FOR_CONNECTION:
 			shutdown(imp_->lisn_socket_, 2);
-			close_sock(imp_->lisn_socket_);
+			aris_close(imp_->lisn_socket_);
 			while (imp_->accept_thread_.joinable())
 				std::this_thread::sleep_for(std::chrono::milliseconds(1));
 			break;
@@ -636,7 +628,7 @@ namespace aris::core{
 				break;
 			case Type::UDP:
 			case Type::UDP_RAW:
-				if (close_sock(imp_->recv_socket_) < 0) ARIS_LOG(SOCKET_SHUT_CLOSE_ERROR, errno);
+				if (aris_close(imp_->recv_socket_) < 0) ARIS_LOG(SOCKET_SHUT_CLOSE_ERROR, errno);
 				break;
 			}
 
@@ -685,7 +677,7 @@ namespace aris::core{
 		if (sock_type == SOCK_STREAM){
 			int tcp_timeout = 10000; //10 seconds before aborting a write()
 			if (setsockopt(imp_->lisn_socket_, SOL_TCP, TCP_USER_TIMEOUT, &tcp_timeout, sizeof(int)) < 0) {
-				close_sock(imp_->lisn_socket_);
+				aris_close(imp_->lisn_socket_);
 				THROW_FILE_LINE("socket setsockopt TCP_USER_TIMEOUT FAILED");
 			}
 
@@ -696,19 +688,19 @@ namespace aris::core{
 			int keepCount = 5; // 探测尝试的次数.如果第1次探测包就收到响应了,则后2次的不再发.
 
 			if (setsockopt(imp_->lisn_socket_, SOL_SOCKET, SO_KEEPALIVE, (void*)&keepAlive, sizeof(keepAlive)) < 0) {
-				close_sock(imp_->lisn_socket_);
+				aris_close(imp_->lisn_socket_);
 				THROW_FILE_LINE("socket setsockopt SO_KEEPALIVE FAILED");
 			}
 			if (setsockopt(imp_->lisn_socket_, IPPROTO_TCP, TCP_KEEPIDLE, (void*)&keepIdle, sizeof(keepIdle)) < 0) {
-				close_sock(imp_->lisn_socket_);
+				aris_close(imp_->lisn_socket_);
 				THROW_FILE_LINE("socket setsockopt TCP_KEEPIDLE FAILED");
 			}
 			if (setsockopt(imp_->lisn_socket_, IPPROTO_TCP, TCP_KEEPINTVL, (void*)&keepInterval, sizeof(keepInterval)) < 0) {
-				close_sock(imp_->lisn_socket_);
+				aris_close(imp_->lisn_socket_);
 				THROW_FILE_LINE("socket setsockopt TCP_KEEPINTVL FAILED");
 			}
 			if (setsockopt(imp_->lisn_socket_, IPPROTO_TCP, TCP_KEEPCNT, (void*)&keepCount, sizeof(keepCount)) < 0) {
-				close_sock(imp_->lisn_socket_);
+				aris_close(imp_->lisn_socket_);
 				THROW_FILE_LINE("socket setsockopt TCP_KEEPCNT FAILED");
 			}
 		}
@@ -718,7 +710,7 @@ namespace aris::core{
 		// 设置socketopt选项,使得地址在程序结束后立即可用 //
 		int nvalue = 1;
 		if (::setsockopt(imp_->lisn_socket_, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<char*>(&nvalue), sizeof(int)) < 0) {
-			close_sock(imp_->lisn_socket_);
+			aris_close(imp_->lisn_socket_);
 			THROW_FILE_LINE("setsockopt failed: SO_REUSEADDR \n");
 		}
 			
@@ -732,14 +724,14 @@ namespace aris::core{
 #ifdef WIN32
 			int err = WSAGetLastError();
 #endif
-			close_sock(imp_->lisn_socket_);
+			aris_close(imp_->lisn_socket_);
 			THROW_FILE_LINE("Socket can't Start as server, because it can't bind\n");
 		}
 		
 		if (connectType() == Type::TCP || connectType() == Type::TCP_RAW || connectType() == Type::WEB || connectType() == Type::WEB_RAW){
 			// 监听lisn_socket_描述符 //
 			if (listen(imp_->lisn_socket_, 5) == -1) {
-				close_sock(imp_->lisn_socket_);
+				aris_close(imp_->lisn_socket_);
 				THROW_FILE_LINE("Socket can't Start as server, because it can't listen\n");
 			}
 
@@ -754,7 +746,7 @@ namespace aris::core{
 #ifdef WIN32
 			DWORD read_timeout = 10;
 			if (::setsockopt(imp_->lisn_socket_, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<char*>(&read_timeout), sizeof(read_timeout)) < 0) {
-				close_sock(imp_->lisn_socket_);
+				aris_close(imp_->lisn_socket_);
 				THROW_FILE_LINE("setsockopt failed: SO_RCVTIMEO \n");
 			}
 #endif
@@ -763,7 +755,7 @@ namespace aris::core{
 			read_timeout.tv_sec = 0;
 			read_timeout.tv_usec = 10000;
 			if (::setsockopt(imp_->lisn_socket_, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<char*>(&read_timeout), sizeof(read_timeout)) < 0) {
-				close_sock(imp_->lisn_socket_);
+				aris_close(imp_->lisn_socket_);
 				THROW_FILE_LINE("setsockopt failed: SO_RCVTIMEO \n");
 			}
 #endif
@@ -819,6 +811,33 @@ namespace aris::core{
 		// 建立 socket 描述符 //
 		if ((imp_->recv_socket_ = socket(AF_INET, sock_type, 0)) < 0)THROW_FILE_LINE("Socket can't connect, because can't socket\n");
 
+#ifdef UNIX
+		if (sock_type == SOCK_STREAM) {
+			// Set the option active //
+			int keepAlive = 1; // 开启keepalive属性
+			int keepIdle = 5; // 如该连接在5秒内没有任何数据往来,则进行探测 
+			int keepInterval = 1; // 探测时发包的时间间隔为5 秒
+			int keepCount = 5; // 探测尝试的次数.如果第1次探测包就收到响应了,则后2次的不再发.
+
+			if (setsockopt(imp_->recv_socket_, SOL_SOCKET, SO_KEEPALIVE, (void*)&keepAlive, sizeof(keepAlive)) < 0) {
+				aris_close(imp_->recv_socket_);
+				THROW_FILE_LINE("socket setsockopt SO_KEEPALIVE FAILED");
+			}
+			if (setsockopt(imp_->recv_socket_, IPPROTO_TCP, TCP_KEEPIDLE, (void*)&keepIdle, sizeof(keepIdle)) < 0) {
+				aris_close(imp_->recv_socket_);
+				THROW_FILE_LINE("socket setsockopt TCP_KEEPIDLE FAILED");
+			}
+			if (setsockopt(imp_->recv_socket_, IPPROTO_TCP, TCP_KEEPINTVL, (void*)&keepInterval, sizeof(keepInterval)) < 0) {
+				aris_close(imp_->recv_socket_);
+				THROW_FILE_LINE("socket setsockopt TCP_KEEPINTVL FAILED");
+			}
+			if (setsockopt(imp_->recv_socket_, IPPROTO_TCP, TCP_KEEPCNT, (void*)&keepCount, sizeof(keepCount)) < 0) {
+				aris_close(imp_->recv_socket_);
+				THROW_FILE_LINE("socket setsockopt TCP_KEEPCNT FAILED");
+			}
+		}
+#endif
+
 		// 设置 time_out //
 		if (imp_->connect_time_out_ >= 0) {
 #ifdef WIN32
@@ -828,7 +847,7 @@ namespace aris::core{
 #ifdef UNIX
 			if (fcntl(imp_->recv_socket_, F_SETFL, O_NONBLOCK) < 0) {
 #endif
-				close_sock(imp_->recv_socket_);
+				aris_close(imp_->recv_socket_);
 				THROW_FILE_LINE("Socket can't connect, because can't set time out\n");
 			}
 		}
@@ -854,11 +873,11 @@ namespace aris::core{
 					// connection pending
 					int ret = select(0, NULL, &setW, &setE, &time_out);
 					if (ret < 0){
-						close_sock(imp_->recv_socket_);
+						aris_close(imp_->recv_socket_);
 						THROW_FILE_LINE("Socket can't connect, because failed to select\n");
 					}
 					else if (ret == 0) {
-						close_sock(imp_->recv_socket_);
+						aris_close(imp_->recv_socket_);
 						WSASetLastError(WSAETIMEDOUT);
 						THROW_FILE_LINE("Socket can't connect, because time out\n");
 					}
@@ -870,13 +889,13 @@ namespace aris::core{
 						// connection failed
 						int err = 0, err_size = sizeof(int);
 						getsockopt(imp_->recv_socket_, SOL_SOCKET, SO_ERROR, (char*) &err, &err_size);
-						close_sock(imp_->recv_socket_);
+						aris_close(imp_->recv_socket_);
 						WSASetLastError(err);
 						THROW_FILE_LINE("Socket can't connect, because failed to FD_ISSET\n");
 					}
 				}
 				else {
-					close_sock(imp_->recv_socket_);
+					aris_close(imp_->recv_socket_);
 					THROW_FILE_LINE("Socket can't connect, because can't connect\n");
 				}
 #endif
@@ -887,11 +906,11 @@ namespace aris::core{
 						int so_error;
 						socklen_t len = sizeof(so_error);
 						if (getsockopt(imp_->recv_socket_, SOL_SOCKET, SO_ERROR, &so_error, &len) < 0) {
-							close_sock(imp_->recv_socket_);
+							aris_close(imp_->recv_socket_);
 							THROW_FILE_LINE("Socket can't connect, because can't getsockopt\n");
 						}
 						if (so_error) {
-							close_sock(imp_->recv_socket_);
+							aris_close(imp_->recv_socket_);
 							if (time_out.tv_sec == 0 && time_out.tv_usec == 0)
 								THROW_FILE_LINE("Socket can't connect, because getsockopt error\n");
 							else
@@ -901,11 +920,11 @@ namespace aris::core{
 							break;// 正常结束
 					}
 					else if (ret == 0) {
-						close_sock(imp_->recv_socket_);
+						aris_close(imp_->recv_socket_);
 						THROW_FILE_LINE("Socket can't connect, because time out\n");
 					}
 					else {
-						close_sock(imp_->recv_socket_);
+						aris_close(imp_->recv_socket_);
 						THROW_FILE_LINE("Socket can't connect, because failed to select\n");
 					}
 				} while (1);
@@ -924,10 +943,98 @@ namespace aris::core{
 		}
 		case Type::WEB:
 		case Type::WEB_RAW:{
-			if (::connect(imp_->recv_socket_, (const struct sockaddr *)&imp_->server_addr_, sizeof(imp_->server_addr_)) == -1) {
-				close_sock(imp_->recv_socket_);
-				THROW_FILE_LINE("Socket can't connect, because can't connect\n");
+			if (::connect(imp_->recv_socket_, (const struct sockaddr*)&imp_->server_addr_, sizeof(imp_->server_addr_)) == -1) {
+				fd_set setW, setE;
+				FD_ZERO(&setW);
+				FD_SET(imp_->recv_socket_, &setW);
+				FD_ZERO(&setE);
+				FD_SET(imp_->recv_socket_, &setE);
+
+				timeval time_out = { 0 };
+				time_out.tv_sec = imp_->connect_time_out_ / 1000;
+				time_out.tv_usec = (imp_->connect_time_out_ % 1000) * 1000;
+
+#ifdef WIN32
+				if (WSAGetLastError() == WSAEWOULDBLOCK) {
+					// connection pending
+					int ret = select(0, NULL, &setW, &setE, &time_out);
+					if (ret < 0) {
+						aris_close(imp_->recv_socket_);
+						THROW_FILE_LINE("Socket can't connect, because failed to select\n");
+					}
+					else if (ret == 0) {
+						aris_close(imp_->recv_socket_);
+						WSASetLastError(WSAETIMEDOUT);
+						THROW_FILE_LINE("Socket can't connect, because time out\n");
+					}
+					else {
+
+					}
+
+					if (FD_ISSET(imp_->recv_socket_, &setE)) {
+						// connection failed
+						int err = 0, err_size = sizeof(int);
+						getsockopt(imp_->recv_socket_, SOL_SOCKET, SO_ERROR, (char*)&err, &err_size);
+						aris_close(imp_->recv_socket_);
+						WSASetLastError(err);
+						THROW_FILE_LINE("Socket can't connect, because failed to FD_ISSET\n");
+					}
+				}
+				else {
+					aris_close(imp_->recv_socket_);
+					THROW_FILE_LINE("Socket can't connect, because can't connect\n");
+				}
+#endif
+#ifdef UNIX
+				do {
+					auto ret = select(imp_->recv_socket_ + 1, NULL, &setW, &setE, &time_out);
+					if (ret > 0) {
+						int so_error;
+						socklen_t len = sizeof(so_error);
+						if (getsockopt(imp_->recv_socket_, SOL_SOCKET, SO_ERROR, &so_error, &len) < 0) {
+							aris_close(imp_->recv_socket_);
+							THROW_FILE_LINE("Socket can't connect, because can't getsockopt\n");
+						}
+						if (so_error) {
+							aris_close(imp_->recv_socket_);
+							if (time_out.tv_sec == 0 && time_out.tv_usec == 0)
+								THROW_FILE_LINE("Socket can't connect, because getsockopt error\n");
+							else
+								continue;
+						}
+						else
+							break;// 正常结束
+					}
+					else if (ret == 0) {
+						aris_close(imp_->recv_socket_);
+						THROW_FILE_LINE("Socket can't connect, because time out\n");
+					}
+					else {
+						aris_close(imp_->recv_socket_);
+						THROW_FILE_LINE("Socket can't connect, because failed to select\n");
+					}
+				} while (1);
+#endif	
 			}
+
+			// 设置为 non-blocking 模式 //
+#ifdef WIN32
+			u_long block = 0;
+			if (ioctlsocket(imp_->recv_socket_, FIONBIO, &block) == SOCKET_ERROR) {
+				imp_->lose_tcp();
+			}
+#endif
+#ifdef UNIX
+			long arg;
+			if ((arg = fcntl(imp_->recv_socket_, F_GETFL, NULL)) < 0) {
+				imp_->lose_tcp();
+			}
+			arg &= (~O_NONBLOCK);
+			if (fcntl(imp_->recv_socket_, F_SETFL, arg) < 0) {
+				imp_->lose_tcp();
+			}
+#endif
+
 
 			char handshake_text[]{
 				"GET / HTTP/1.1\r\n"
@@ -938,12 +1045,13 @@ namespace aris::core{
 				"Sec-WebSocket-Version: 13\r\n"
 				"Sec-WebSocket-Key: w4v7O6xFTi36lq3RNcgctw==\r\n\r\n" };
 
-			if(send(imp_->recv_socket_, handshake_text, static_cast<int>(std::strlen(handshake_text)), 0) == -1)
+			if(aris_send(imp_->recv_socket_, handshake_text, static_cast<int>(std::strlen(handshake_text)), 0) == -1)
 				THROW_FILE_LINE("Socket can't connect, web sock error 1\n");
 
 			char recv_data[1024]{ 0 };
 			int res = recv(imp_->recv_socket_, recv_data, 1024, 0);
-			if(res <= 0)THROW_FILE_LINE("Socket can't connect, web sock error 2\n");
+			if(res <= 0)
+				THROW_FILE_LINE("Socket can't connect, web sock error 2\n");
 
 			auto header_map = make_header_map(recv_data);
 
@@ -977,7 +1085,7 @@ namespace aris::core{
 		case State::WORKING:{
 			switch (imp_->type_){
 			case Type::TCP:
-				if (send(imp_->recv_socket_, reinterpret_cast<const char *>(&data.header()), data.size() + sizeof(MsgHeader), 0) == -1)
+				if (aris_send(imp_->recv_socket_, reinterpret_cast<const char *>(&data.header()), data.size() + sizeof(MsgHeader), 0) == -1)
 					THROW_FILE_LINE("Socket failed sending data, because network failed\n");
 				else
 					return;
@@ -986,7 +1094,7 @@ namespace aris::core{
 				auto packed_data = imp_->is_server_ 
 					? pack_data_server(reinterpret_cast<const char*>(&data.header()), data.size() + sizeof(aris::core::MsgHeader))
 					: pack_data_client(reinterpret_cast<const char*>(&data.header()), data.size() + sizeof(aris::core::MsgHeader));
-				if (send(imp_->recv_socket_, packed_data.data(), static_cast<int>(packed_data.size()), 0) == -1)
+				if (aris_send(imp_->recv_socket_, packed_data.data(), static_cast<int>(packed_data.size()), 0) == -1)
 					THROW_FILE_LINE("Socket failed sending data, because network failed\n");
 				else
 					return;
@@ -1023,7 +1131,7 @@ namespace aris::core{
 		case State::WORKING:{
 			switch (imp_->type_){
 			case Type::TCP_RAW: {
-				if (send(imp_->recv_socket_, data, size, 0) == -1)
+				if (aris_send(imp_->recv_socket_, data, size, 0) == -1)
 					THROW_FILE_LINE("Socket failed sending data, because network failed\n");
 				else
 					return;
@@ -1031,7 +1139,7 @@ namespace aris::core{
 			}
 			case Type::WEB_RAW:{
 				auto packed_data = imp_->is_server_ ? pack_data_server(data, size) : pack_data_client(data, size);
-				if (send(imp_->recv_socket_, packed_data.data(), static_cast<int>(packed_data.size()), 0) == -1)
+				if (aris_send(imp_->recv_socket_, packed_data.data(), static_cast<int>(packed_data.size()), 0) == -1)
 					THROW_FILE_LINE("Socket failed sending data, because network failed\n");
 				else
 					return;
@@ -1074,7 +1182,7 @@ namespace aris::core{
 	};
 	
 	auto Socket::port()const->const std::string&{
-		std::unique_lock<std::recursive_mutex> lck(imp_->state_mutex_);
+		//std::unique_lock<std::recursive_mutex> lck(imp_->state_mutex_);
 		return imp_->port_;
 	}
 	auto Socket::setPort(const std::string &port)->void{
@@ -1082,7 +1190,7 @@ namespace aris::core{
 		imp_->port_ = port;
 	}
 	auto Socket::remoteIP()const->const std::string &{
-		std::unique_lock<std::recursive_mutex> lck(imp_->state_mutex_);
+		//std::unique_lock<std::recursive_mutex> lck(imp_->state_mutex_);
 		return imp_->remote_ip_;
 	}
 	auto Socket::setRemoteIP(const std::string &remote_ip)->void{

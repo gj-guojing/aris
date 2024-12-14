@@ -7,6 +7,7 @@
 #include <aris/core/log.hpp>
 #include <aris/core/expression_calculator.hpp>
 #include <aris/core/socket.hpp>
+#include <aris/core/socket_multi_io.hpp>
 #include <aris/core/pipe.hpp>
 #include <aris/core/command.hpp>
 #include <aris/core/reflection.hpp>

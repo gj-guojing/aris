@@ -15,6 +15,63 @@
 #include <aris/core/basic_type.hpp>
 
 namespace aris::dynamic{
+	
+	// 补偿手眼精度
+	// 
+	// 1. 坐标系：
+	//    E：眼睛坐标系 
+	//    R：机器人坐标系（法兰盘位置）
+	//    B：基座坐标系
+	//    O：工件坐标系（obj）
+	// 
+	// 2. 时刻
+	//    a：视觉标定时刻（理想状态）
+	//    b：一次标定时刻（小车刚到）
+	//    c：二次标定时刻（机械臂基于视觉补偿运动到理想状态零位）
+	//
+	// 3. 假设
+	//    
+	// 
+	// 4. 已知
+	//    P_Ea2Ra : 理想状态下的手眼关系
+	//    P_Oa2Ea : 理想状态下的工件位置
+	//    P_Ra2Ba : 理想状态下的初始法兰位置
+	//    
+	//    P_Ob2Eb : 小车刚到时，工件在视觉中的位置
+	// 
+	// 
+	// 5. 未知
+	//    手眼的误差：Pd（P_Eb2Rb = P_Ec2Rc = Pd * P_Ea2Ra）
+	//   
+	// 
+	//    
+	// 6. 推导
+	//    3个时刻的 O 为世界坐标系远点，因此有：
+	//       P_Eb2Ea = P_Oa2Ea * P_Ob2Eb^T
+	//	  
+	//    理论上在b时刻，经过视觉后的机器人位姿补偿量为 Pc
+	//    => P_Rb2Ra = P_Ea2Ra
+	// 
+	// 
+	// 
+	//
+
+	auto inline s_eye_compensate() {
+	
+	}
+
+	//
+	// obj_in_eye
+	// tool_in_base
+	// mem_need: n x n x 16
+	auto ARIS_API s_eye_in_hand_calib(int n, const double* pq_obj_in_eye, const double* pq_tool_in_base, double* eye_in_tool, double *mem_need)->void;
+
+	//
+	// obj_in_eye
+	// tool_in_base
+	// mem_need: n x n x 16
+	auto ARIS_API s_eye_to_hand_calib(int n, const double* pq_obj_in_eye, const double* pq_tool_in_base, double* eye_in_base, double* mem_need)->void;
+
 	auto inline s_sinx_over_x(double x)->double { return std::abs(x) < 1e-8 ? 1.0 : std::sin(x) / x; };
 	// 1-cos(x) = 2 sin(x/2)^2
 	//    1-cos(x) / x^2
@@ -221,9 +278,10 @@ namespace aris::dynamic{
 		return size;
 	}
 
-	using IkFunc = std::function<int(const double* ee_pos, int which_root, double* input)>;
+	using IkFunc2 = std::function<int(const void* dh, const double* ee_pos, const double*current_input, int which_root, double* input)>;
 	//    root_size : 解的大小，例如 puma 的解是 6 维
 	//     root_num : 解的个数，例如 puma 的反解的个数为 8 
+	//           dh : 反解需要用到的参数
 	//         func : 反解函数
 	//   which_root : 哪一组解，位于区间 [0 root_num) 时，为特定的解，否则选择最接近 current_root 的这一组解
 	//       ee_pos : 末端位置
@@ -231,7 +289,7 @@ namespace aris::dynamic{
 	//    roots_mem : 计算所需的内存，大小应为 root_size * root_num
 	// root_periods : 解的周期，例如转动轴周期为 2 PI，如果为 inf 或 nan，则说明没有周期
 	// current_root : 当前解，用于在 which_root < 0 或 >= root_num 时，选择解
-	auto ARIS_API s_ik(int root_size, int root_num, IkFunc func, int which_root, const double* ee_pos, double* input_pos, double* roots_mem, const double* root_periods = nullptr, const double* current_root = nullptr)->int;
+	auto ARIS_API s_ik(int root_size, int root_num, const void* dh, IkFunc2 func, int which_root, const double* ee_pos, double* input_pos, double* roots_mem, const double* root_periods = nullptr, const double* current_root = nullptr)->int;
 
 }
 

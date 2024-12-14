@@ -22,7 +22,9 @@ namespace aris::dynamic {
 
 //#define ARIS_DEBUG_DELTA_SOLVER
 
-	auto deltaInverse(const double *param, const double *ee_xyza, int which_root, double *input)->int {
+	auto deltaInverse(const void *para, const double *ee_xyza, const double *current_input, int which_root, double *input)->int {
+		const double* param = reinterpret_cast<const double*>(para);
+		
 		for (int i = 0; i < 3; ++i) {
 			// 尺寸 //
 			const double& ax = param[0 + i * 11];
@@ -61,7 +63,7 @@ namespace aris::dynamic {
 		input[3] = ee_xyza[3];
 		return 0;
 	}
-	auto deltaForward(const double *param, const double *input, int which_root, double *ee_xyza)->int {
+	auto deltaForward(const void *para, const double *input, const double* current_input, int which_root, double *ee_xyza)->int {
 		// 记p1 为 S1 S2 的中点位置，p2为末端到 S3 S4 中点的向量
 		//
 		// 于是对其中某一根支联，应有以下方程：
@@ -178,7 +180,7 @@ namespace aris::dynamic {
 		// 
 		// 
 
-
+		const double* param = reinterpret_cast<const double*>(para);
 
 		// 根据 p1 & p2 计算k
 		double p1[9], p2[9], k[9], s[3];
@@ -358,19 +360,20 @@ namespace aris::dynamic {
 			for (auto &m : model()->motionPool()) m.updP();
 			return 0;
 		}
-		auto virtual kinPosPure(const double* output, double* input, int which_root)->int override {
-			double current_input_pos[4]{}, root_mem[4]{};
+		auto virtual kinPosPure(const double* output, double* input, int which_root, const double* current_input = nullptr)->int override {
+			double root_mem[4]{};
 			const double input_period[4]{ aris::PI * 2, aris::PI * 2,aris::PI * 2,aris::PI * 2 };
-
-			for (int i = 0; i < 4; ++i)
-				current_input_pos[i] = model()->motionPool()[i].mpInternal();
-
 			auto dh = dynamic_cast<aris::dynamic::MatrixVariable*>(model()->findVariable("dh"))->data().data();
-			auto ik = [this, dh](const double* ee_pos, int which_root, double* input)->int {
-				return deltaInverse(dh, ee_pos, which_root, input);
-			};
 
-			return s_ik(4, rootNumber(), ik, which_root, output, input, root_mem, input_period, current_input_pos);
+			if (current_input == nullptr) {
+				double current_input_pos[4];
+				for (int i = 0; i < 4; ++i)
+					current_input_pos[i] = model()->motionPool()[i].mpInternal();
+				return s_ik(4, rootNumber(), dh, deltaInverse, which_root, output, input, root_mem, input_period, current_input_pos);
+			}
+			else {
+				return s_ik(4, rootNumber(), dh, deltaInverse, which_root, output, input, root_mem, input_period, current_input);
+			}
 		}
 
 		DeltaInverseKinematicSolver() {
@@ -386,7 +389,7 @@ namespace aris::dynamic {
 			auto dh = dynamic_cast<aris::dynamic::MatrixVariable*>(model()->findVariable("dh"))->data().data();
 
 			model()->getInputPos(input);
-			if (auto ret = deltaForward(dh, input, 0, output))
+			if (auto ret = kinPosPure(input, output, whichRoot()))
 				return ret;
 
 			// ee //
@@ -441,18 +444,19 @@ namespace aris::dynamic {
 			for (auto &m : model()->generalMotionPool()) m.updP();
 			return 0;
 		}
-		auto virtual kinPosPure(const double* output, double* input, int which_root)->int override {
-			double current_output_pos[4]{}, root_mem[4]{};
+		auto virtual kinPosPure(const double* output, double* input, int which_root, const double* current_input = nullptr)->int override {
+			double root_mem[4]{};
 			const double input_period[4]{ aris::PI * 2, aris::PI * 2,aris::PI * 2,aris::PI * 2 };
-
-			model()->getOutputPos(current_output_pos);
-
 			auto dh = dynamic_cast<aris::dynamic::MatrixVariable*>(model()->findVariable("dh"))->data().data();
-			auto ik = [this, dh](const double* ee_pos, int which_root, double* input)->int {
-				return deltaForward(dh, ee_pos, which_root, input);
-			};
 
-			return s_ik(4, rootNumber(), ik, which_root, output, input, root_mem, input_period, current_output_pos);
+			if (current_input == nullptr) {
+				double current_output_pos[4];
+				model()->getOutputPos(current_output_pos);
+				return s_ik(4, rootNumber(), dh, deltaForward, which_root, output, input, root_mem, input_period, current_output_pos);
+			}
+			else {
+				return s_ik(4, rootNumber(), dh, deltaForward, which_root, output, input, root_mem, input_period, current_input);
+			}
 		}
 
 
@@ -543,7 +547,7 @@ namespace aris::dynamic {
 		};
 		double init_zero[4]{ 0,0,0,0 };
 		double xyza[4], xyz1[3], xyz2[3], xyz3[3];
-		deltaForward(dh_param, init_zero, 0, xyza);
+		deltaForward(dh_param, init_zero, nullptr, 0, xyza);
 
 		double rm1[9], rm2[9], rm3[9];
 		s_rmz(param.theta1, rm1);

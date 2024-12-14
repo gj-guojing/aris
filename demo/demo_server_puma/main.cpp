@@ -4,9 +4,6 @@
 
 #include <aris.hpp>
 
-
-
-
 int main(int argc, char *argv[]){
 	aris::core::setLanguage(1);
 

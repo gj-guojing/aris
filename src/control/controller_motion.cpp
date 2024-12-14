@@ -114,6 +114,7 @@ namespace aris::control{
 		std::unique_ptr<aris::core::PointerArray<DigitalIo>> digital_io_pool_{ new aris::core::PointerArray<DigitalIo> };
 		std::unique_ptr<aris::core::PointerArray<AnalogIo>> analog_io_pool_{ new aris::core::PointerArray<AnalogIo> };
 		std::unique_ptr<aris::core::PointerArray<FtSensor>> ft_sensor_pool_{ new aris::core::PointerArray<FtSensor> };
+		std::unique_ptr<aris::core::PointerArray<CustomSlave>> custom_slave_pool_{ new aris::core::PointerArray<CustomSlave> };
 	};
 	auto Controller::resetMotorPool(aris::core::PointerArray<Motor> *pool) { imp_->motor_pool_.reset(pool); }
 	auto Controller::motorPool()->aris::core::PointerArray<Motor>& { return *imp_->motor_pool_; }
@@ -123,11 +124,14 @@ namespace aris::control{
 	auto Controller::analogIoPool()->aris::core::PointerArray<AnalogIo>& { return *imp_->analog_io_pool_; }
 	auto Controller::resetFtSensorPool(aris::core::PointerArray<FtSensor> *pool) { imp_->ft_sensor_pool_.reset(pool); }
 	auto Controller::ftSensorPool()->aris::core::PointerArray<FtSensor>& { return *imp_->ft_sensor_pool_; }
+	auto Controller::resetCustomSlavePool(aris::core::PointerArray<CustomSlave> *pool) { imp_->custom_slave_pool_.reset(pool); }
+	auto Controller::customSlavePool()->aris::core::PointerArray<CustomSlave>& { return *imp_->custom_slave_pool_; }
 	auto Controller::init()->void{
 		for (auto &motor : motorPool())	 motor.init();
 		for (auto &digital_io : digitalIoPool()) digital_io.init();
 		for (auto &analog_io : analogIoPool()) analog_io.init();
 		for (auto &ft_sensor : ftSensorPool()) ft_sensor.init();
+		for (auto &custom_slave : customSlavePool()) custom_slave.init();
 	}
 	Controller::~Controller() = default;
 	Controller::Controller(const std::string &name) :imp_(new Imp) {}
@@ -161,6 +165,9 @@ namespace aris::control{
 		aris::core::class_<FtSensor>("FtSensor")
 			;
 
+		aris::core::class_<CustomSlave>("CustomSlave")
+			;
+
 		aris::core::class_<aris::core::PointerArray<Motor>>("MotorPoolObject")
 			.asRefArray();
 
@@ -173,15 +180,20 @@ namespace aris::control{
 		aris::core::class_<aris::core::PointerArray<FtSensor>>("FtSensorPoolObject")
 			.asRefArray();
 
+		aris::core::class_<aris::core::PointerArray<CustomSlave>>("CustomSlavePoolObject")
+			.asRefArray();
+
 		typedef aris::core::PointerArray<Motor>&(Controller::*MotorPoolFunc)();
 		typedef aris::core::PointerArray<DigitalIo>&(Controller::*DigitalIoPoolFunc)();
 		typedef aris::core::PointerArray<AnalogIo>&(Controller::*AnalogIoPoolFunc)();
 		typedef aris::core::PointerArray<FtSensor>&(Controller::*FtSensorPoolFunc)();
+		typedef aris::core::PointerArray<CustomSlave>&(Controller::*CustomSlavePoolFunc)();
 		aris::core::class_<Controller>("Controller")
 			.prop("motor_pool", &Controller::resetMotorPool, MotorPoolFunc(&Controller::motorPool))
 			.prop("digital_io_pool", &Controller::resetDigitalIoPool, DigitalIoPoolFunc(&Controller::digitalIoPool))
 			.prop("analog_io_pool", &Controller::resetAnalogIoPool, AnalogIoPoolFunc(&Controller::analogIoPool))
 			.prop("ft_sensor_pool", &Controller::resetFtSensorPool, FtSensorPoolFunc(&Controller::ftSensorPool))
+			.prop("custom_slave_pool", &Controller::resetCustomSlavePool, CustomSlavePoolFunc(&Controller::customSlavePool))
 			;
 	}
 }

@@ -44,6 +44,7 @@ namespace aris::plan{
 	auto Plan::sharedPtrForThis()noexcept->std::shared_ptr<Plan> { return imp_->shared_for_this_.lock(); }
 	auto Plan::setSharedPtrForThis(std::shared_ptr<Plan>& p)noexcept->void { imp_->shared_for_this_ = p; }
 
+	auto Plan::stringParam(std::string_view param_name)->std::string { return std::string(cmdParams().at(param_name)); }
 	auto Plan::doubleParam(std::string_view param_name)->double { return std::stod(std::string(cmdParams().at(param_name))); }
 	auto Plan::floatParam(std::string_view param_name)->float { return static_cast<float>(std::stod(std::string(cmdParams().at(param_name)))); }
 	auto Plan::int32Param(std::string_view param_name)->std::int32_t { return std::stol(std::string(cmdParams().at(param_name)), nullptr, 0); }
